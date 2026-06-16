@@ -36,3 +36,10 @@ def create_applicant(data: ApplicantCreate) -> dict:
     except DuplicateKeyError:
         raise HTTPException(status_code=409, detail="National ID already registered")
     return doc
+
+
+def get_applicant(applicant_id: str) -> dict:
+    doc = applicants_col.find_one({"applicant_id": applicant_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Applicant not found")
+    return doc
