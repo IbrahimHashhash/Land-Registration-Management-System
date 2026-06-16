@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import app.database  # runs on import: connects to MongoDB and creates indexes
 
 app = FastAPI(title="LRMIS API")
 
