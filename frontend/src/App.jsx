@@ -1,1 +1,16 @@
-// Root component. Sets up routing and global layout.
+import React from 'react'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+
+function Home() {
+  return <h1>LRMIS Applicant Portal</h1>
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Home />} />
+      </Routes>
+    </BrowserRouter>
+  )
+}
