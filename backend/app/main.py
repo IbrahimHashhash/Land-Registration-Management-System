@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import app.database  # runs on import: connects to MongoDB and creates indexes
+import app.database
+from app.features.applicants.routes import router as applicants_router
 
 app = FastAPI(title="LRMIS API")
 
@@ -11,6 +12,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(applicants_router)
 
 @app.get("/")
 def root():
