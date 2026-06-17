@@ -2,8 +2,8 @@ from datetime import datetime, timezone
 import uuid
 from pymongo.errors import DuplicateKeyError
 from fastapi import HTTPException
-from app.database import applicants_col, documents_col, logs_col, applications_col
-from app.features.applicants.schemas import ApplicantCreate, DocumentUpload, CommentCreate
+from app.database import applicants_col, documents_col, logs_col, applications_col, objections_col
+from app.features.applicants.schemas import ApplicantCreate, DocumentUpload, CommentCreate, ObjectionCreate
 
 
 def create_applicant(data: ApplicantCreate) -> dict:
@@ -86,3 +86,38 @@ def add_comment(application_id: str, data: CommentCreate) -> dict:
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Application not found")
     return comment
+
+def submit_objection(application_id: str ,data: ObjectionCreate) -> dict:
+    now = datetime.now(timezone.utc)
+    doc = {
+        "objection_id": "OBJ-" + str(uuid.uuid4())[:8].upper(),
+        "application_id":application_id,
+        "author_id": data.author_id,
+        "reason": data.reason,
+        "supporting_documents": data.supporting_documents,
+        "status": "open",
+        "created_at": now
+    }
+    application = applications_col.find_one({"application_id": application_id})
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    if application.get("status") in ["closed", "rejected"]:
+        raise HTTPException(status_code=400, detail="Cannot object on a closed or rejected application")
+
+    objections_col.insert_one(doc)
+    result = applications_col.update_one(
+        {"application_id": application_id}, 
+        {
+            "$set": {"objection.has_objection" : True, "status": "under_objection"},
+            "$push": {"objection.objection_ids": doc["objection_id"]}
+        }
+    )
+    logs_col.insert_one({
+        "application_id": application_id,
+        "event_type": "objection_submitted",
+        "actor_id": data.author_id,
+        "actor_role": "applicant",
+        "at": now,
+        "meta": {"objection_id": doc["objection_id"], "reason": data.reason},
+    })
+    return doc
