@@ -2,19 +2,33 @@ import React from 'react'
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
 import RegisterApplicant from './pages/RegisterApplicant'
 import ApplicantProfile from './pages/ApplicantProfile'
+import StaffDashboard from './pages/StaffDashboard'
+import ApplicationManagement from './pages/ApplicationManagement'
+import ApplicationDetails from './pages/ApplicationDetails'
+import RegistrarReview from './pages/RegistrarReview'
+import CertificateIssuance from './pages/CertificateIssuance'
 
 export default function App() {
   return (
     <BrowserRouter>
-      <nav className="bg-white border-b border-gray-200 px-6 py-3 flex gap-4 text-sm font-medium text-gray-600">
-        <Link to="/" className="hover:text-blue-600">Home</Link>
-        <Link to="/register" className="hover:text-blue-600">Register</Link>
-        <Link to="/profile" className="hover:text-blue-600">Profile</Link>
-      </nav>
       <Routes>
-        <Route path="/" element={<h1 className="p-6 text-2xl font-bold">LRMIS Applicant Portal</h1>} />
-        <Route path="/register" element={<RegisterApplicant />} />
-        <Route path="/profile" element={<ApplicantProfile />} />
+        <Route path="/"                    element={<StaffDashboard />} />
+        <Route path="/applications"        element={<ApplicationManagement />} />
+        <Route path="/applications/:id"    element={<ApplicationDetails />} />
+        <Route path="/review/:id"           element={<RegistrarReview />} />
+        <Route path="/certificates"        element={<CertificateIssuance />} />
+        <Route path="/register" element={
+          <div className="max-w-3xl mx-auto px-6 py-8">
+            <Link to="/" className="text-sm text-blue-600 hover:underline">← Back to Dashboard</Link>
+            <RegisterApplicant />
+          </div>
+        } />
+        <Route path="/profile" element={
+          <div className="max-w-5xl mx-auto px-6 py-8">
+            <Link to="/" className="text-sm text-blue-600 hover:underline">← Back to Dashboard</Link>
+            <ApplicantProfile />
+          </div>
+        } />
       </Routes>
     </BrowserRouter>
   )
