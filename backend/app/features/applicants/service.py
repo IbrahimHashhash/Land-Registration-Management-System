@@ -2,8 +2,8 @@ from datetime import datetime, timezone
 import uuid
 from pymongo.errors import DuplicateKeyError
 from fastapi import HTTPException
-from app.database import applicants_col
-from app.features.applicants.schemas import ApplicantCreate
+from app.database import applicants_col, documents_col, logs_col
+from app.features.applicants.schemas import ApplicantCreate, DocumentUpload
 
 
 def create_applicant(data: ApplicantCreate) -> dict:
@@ -42,4 +42,27 @@ def get_applicant(applicant_id: str) -> dict:
     doc = applicants_col.find_one({"applicant_id": applicant_id})
     if not doc:
         raise HTTPException(status_code=404, detail="Applicant not found")
+    return doc
+
+
+def upload_document(application_id: str, data: DocumentUpload) -> dict:
+    now = datetime.now(timezone.utc)
+    doc = {
+        "document_id": "DOC-" + str(uuid.uuid4())[:8].upper(),
+        "application_id": application_id,
+        "document_type": data.document_type,
+        "file_name": data.file_name,
+        "file_path": data.file_path,
+        "verification_status": "pending_review",
+        "uploaded_at": now,
+    }
+    documents_col.insert_one(doc)
+    logs_col.insert_one({
+        "application_id": application_id,
+        "event_type": "document_uploaded",
+        "actor_id": None,
+        "actor_role": "applicant",
+        "at": now,
+        "meta": {"document_id": doc["document_id"], "document_type": data.document_type},
+    })
     return doc
