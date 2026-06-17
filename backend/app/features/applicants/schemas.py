@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Literal, List, Optional
+from datetime import datetime
 
 class ApplicantCreate(BaseModel):
     full_name: str
@@ -49,3 +50,19 @@ class ApplicantInternal(ApplicantPublic):
     on_status_change: bool
     on_missing_documents: bool
     on_certificate_ready: bool
+
+
+class DocumentUpload(BaseModel):
+    document_type: Literal["ownership_deed", "id_copy", "sale_contract", "survey_report", "power_of_attorney", "other"]
+    file_name: str
+    file_path: str
+
+
+class DocumentResponse(BaseModel):
+    document_id: str
+    application_id: str
+    document_type: str
+    file_name: str
+    file_path: str
+    verification_status: str
+    uploaded_at: datetime
