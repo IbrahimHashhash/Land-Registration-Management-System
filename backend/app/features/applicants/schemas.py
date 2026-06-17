@@ -52,6 +52,20 @@ class ApplicantInternal(ApplicantPublic):
     on_certificate_ready: bool
 
 
+class CommentCreate(BaseModel):
+    author_id: str
+    text: str
+
+
+class CommentResponse(BaseModel):
+    comment_id: str
+    application_id: str
+    author_id: str
+    author_role: str
+    text: str
+    created_at: datetime
+
+
 class DocumentUpload(BaseModel):
     document_type: Literal["ownership_deed", "id_copy", "sale_contract", "survey_report", "power_of_attorney", "other"]
     file_name: str
