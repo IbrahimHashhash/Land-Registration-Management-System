@@ -80,3 +80,17 @@ class DocumentResponse(BaseModel):
     file_path: str
     verification_status: str
     uploaded_at: datetime
+
+class ObjectionCreate(BaseModel):
+    author_id: str
+    reason: str
+    supporting_documents: List[str] = []
+
+class ObjectionResponse(BaseModel):
+    objection_id: str
+    application_id: str
+    author_id: str
+    reason: str
+    supporting_documents: List[str]
+    status: str
+    created_at: datetime
