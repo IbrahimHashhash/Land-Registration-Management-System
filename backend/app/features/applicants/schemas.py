@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Literal, List, Optional
+from datetime import datetime
 
 class ApplicantCreate(BaseModel):
     full_name: str
@@ -64,4 +65,4 @@ class DocumentResponse(BaseModel):
     file_name: str
     file_path: str
     verification_status: str
-    uploaded_at: str
+    uploaded_at: datetime
