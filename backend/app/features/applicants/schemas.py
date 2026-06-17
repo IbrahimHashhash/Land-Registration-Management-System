@@ -56,3 +56,12 @@ class DocumentUpload(BaseModel):
     file_name: str
     file_path: str
 
+
+class DocumentResponse(BaseModel):
+    document_id: str
+    application_id: str
+    document_type: str
+    file_name: str
+    file_path: str
+    verification_status: str
+    uploaded_at: str
