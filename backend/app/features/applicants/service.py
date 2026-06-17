@@ -10,24 +10,33 @@ def create_applicant(data: ApplicantCreate) -> dict:
     doc = {
         "applicant_id": "APP-" + str(uuid.uuid4())[:8].upper(),
         "full_name": data.full_name,
-        "national_id": data.national_id,
         "applicant_type": data.applicant_type,
-        "email": data.email,
-        "phone": data.phone,
-        "city": data.city,
-        "neighborhood": data.neighborhood,
-        "address": data.address,
-        "zone_id": data.zone_id,
-        "preferred_language": data.preferred_language,
-        "preferred_contact": data.preferred_contact,
-        "notify_by_email": data.notify_by_email,
-        "notify_by_sms": data.notify_by_sms,
-        "profile_public": data.profile_public,
         "verification_state": "unverified",
-        "on_status_change": True,
-        "on_missing_documents": True,
-        "on_certificate_ready": True,
-        "stats": {"total_applications": 0, "approved": 0, "pending": 0},
+        "identity": {
+            "national_id": data.identity.national_id,
+            "verified": False,
+            "verification_method": "otp_stub",
+        },
+        "contacts": {
+            "email": data.contacts.email,
+            "phone": data.contacts.phone,
+        },
+        "address": {
+            "city": data.address.city,
+            "neighborhood": data.address.neighborhood,
+            "zone_id": data.address.zone_id,
+        },
+        "preferences": {
+            "preferred_contact": data.preferences.preferred_contact,
+            "language": data.preferences.language,
+            "notifications": {
+                "on_status_change": data.preferences.notifications.on_status_change,
+                "on_missing_documents": data.preferences.notifications.on_missing_documents,
+                "on_certificate_ready": data.preferences.notifications.on_certificate_ready,
+            },
+        },
+        "profile_public": data.profile_public,
+        "stats": {"total_applications": 0, "approved_applications": 0, "pending_applications": 0},
         "linked_applications": [],
         "created_at": datetime.now(timezone.utc),
     }
@@ -57,14 +66,16 @@ def upload_document(application_id: str, data: DocumentUpload) -> dict:
         "uploaded_at": now,
     }
     documents_col.insert_one(doc)
-    logs_col.insert_one({
-        "application_id": application_id,
-        "event_type": "document_uploaded",
-        "actor_id": None,
-        "actor_role": "applicant",
-        "at": now,
-        "meta": {"document_id": doc["document_id"], "document_type": data.document_type},
-    })
+    logs_col.update_one(
+        {"application_id": application_id},
+        {"$push": {"event_stream": {
+            "type": "document_uploaded",
+            "by": {"actor_type": "applicant", "actor_id": None},
+            "at": now,
+            "meta": {"document_id": doc["document_id"], "document_type": data.document_type},
+        }}, "$setOnInsert": {"application_id": application_id, "computed_kpis": {}}},
+        upsert=True
+    )
     return doc
 
 
@@ -112,19 +123,24 @@ def submit_objection(application_id: str ,data: ObjectionCreate) -> dict:
             "$push": {"objection.objection_ids": doc["objection_id"]}
         }
     )
-    logs_col.insert_one({
-        "application_id": application_id,
-        "event_type": "objection_submitted",
-        "actor_id": data.author_id,
-        "actor_role": "applicant",
-        "at": now,
-        "meta": {"objection_id": doc["objection_id"], "reason": data.reason},
-    })
+    logs_col.update_one(
+        {"application_id": application_id},
+        {"$push": {"event_stream": {
+            "type": "objection_submitted",
+            "by": {"actor_type": "applicant", "actor_id": data.author_id},
+            "at": now,
+            "meta": {"objection_id": doc["objection_id"], "reason": data.reason},
+        }}, "$setOnInsert": {"application_id": application_id, "computed_kpis": {}}},
+        upsert=True
+    )
     return doc
 
 def get_timeline(application_id: str) -> list:
-    result = logs_col.find({"application_id" : application_id}).sort("at", 1)
-    return list(result)
+    log = logs_col.find_one({"application_id": application_id})
+    if not log:
+        return []
+    events = log.get("event_stream", [])
+    return sorted(events, key=lambda e: e["at"])
 
 def get_applications_for_applicant(applicant_id: str) -> list:
     # TODO: confirm field name with zaid — assuming applicant_ref.applicant_id

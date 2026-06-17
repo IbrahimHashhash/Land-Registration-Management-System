@@ -2,27 +2,47 @@ from pydantic import BaseModel
 from typing import Literal, List, Optional
 from datetime import datetime
 
-class ApplicantCreate(BaseModel):
-    full_name: str
+
+
+class IdentityBlock(BaseModel):
     national_id: str
-    applicant_type: Literal["citizen", "lawyer", "company", "surveyor", "authorized_representative"]
+    verified: bool = False
+    verification_method: str = "otp_stub"
+
+class ContactsBlock(BaseModel):
     email: str
     phone: str
+
+class AddressBlock(BaseModel):
     city: str
     neighborhood: str
-    address: str
     zone_id: str
-    preferred_language: Literal["ar", "en"] = "ar"
+
+class NotificationsBlock(BaseModel):
+    on_status_change: bool = True
+    on_missing_documents: bool = True
+    on_certificate_ready: bool = True
+
+class PreferencesBlock(BaseModel):
     preferred_contact: Literal["email", "phone"] = "email"
-    notify_by_email: bool = True
-    notify_by_sms: bool = False
-    profile_public: bool = False
+    language: Literal["ar", "en"] = "ar"
+    notifications: NotificationsBlock = NotificationsBlock()
 
-
-class ApplicantStats(BaseModel):
+class StatsBlock(BaseModel):
     total_applications: int = 0
-    approved: int = 0
-    pending: int = 0
+    approved_applications: int = 0
+    pending_applications: int = 0
+
+
+
+class ApplicantCreate(BaseModel):
+    full_name: str
+    applicant_type: Literal["citizen", "lawyer", "company", "surveyor", "authorized_representative"]
+    identity: IdentityBlock
+    contacts: ContactsBlock
+    address: AddressBlock
+    preferences: PreferencesBlock = PreferencesBlock()
+    profile_public: bool = False
 
 
 class ApplicantPublic(BaseModel):
@@ -30,40 +50,18 @@ class ApplicantPublic(BaseModel):
     full_name: str
     applicant_type: str
     verification_state: str
-    email: str
-    phone: str
-    city: str
-    neighborhood: str
-    address: str
-    zone_id: str
-    preferred_language: str
-    preferred_contact: str
-    notify_by_email: bool
-    notify_by_sms: bool
-    stats: ApplicantStats
+    contacts: ContactsBlock
+    address: AddressBlock
+    preferences: PreferencesBlock
+    stats: StatsBlock
     linked_applications: List[str] = []
+    created_at: datetime
 
 
 class ApplicantInternal(ApplicantPublic):
-    national_id: str
+    identity: IdentityBlock
     profile_public: bool
-    on_status_change: bool
-    on_missing_documents: bool
-    on_certificate_ready: bool
 
-
-class CommentCreate(BaseModel):
-    author_id: str
-    text: str
-
-
-class CommentResponse(BaseModel):
-    comment_id: str
-    application_id: str
-    author_id: str
-    author_role: str
-    text: str
-    created_at: datetime
 
 
 class DocumentUpload(BaseModel):
@@ -81,10 +79,27 @@ class DocumentResponse(BaseModel):
     verification_status: str
     uploaded_at: datetime
 
+
+class CommentCreate(BaseModel):
+    author_id: str
+    text: str
+
+
+class CommentResponse(BaseModel):
+    comment_id: str
+    application_id: str
+    author_id: str
+    author_role: str
+    text: str
+    created_at: datetime
+
+
+
 class ObjectionCreate(BaseModel):
     author_id: str
     reason: str
     supporting_documents: List[str] = []
+
 
 class ObjectionResponse(BaseModel):
     objection_id: str
@@ -95,15 +110,22 @@ class ObjectionResponse(BaseModel):
     status: str
     created_at: datetime
 
-class TimelineEvent(BaseModel):
-    event_type: str
+
+
+class TimelineBy(BaseModel):
+    actor_type: str
     actor_id: Optional[str]
-    actor_role: str
+
+class TimelineEvent(BaseModel):
+    type: str
+    by: TimelineBy
     at: datetime
     meta: Optional[dict] = None
+
+
 
 class ApplicationSummary(BaseModel):
     application_id: str
     status: str
     application_type: str
-    submission_date: datetime
+    submission_date: Optional[datetime] = None

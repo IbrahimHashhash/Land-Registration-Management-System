@@ -15,7 +15,7 @@ logs_col         = db["performance_logs"]
 applications_col = db["land_applications"]
 
 # Indexes
-applicants_col.create_index("national_id", unique=True)
+applicants_col.create_index("identity.national_id", unique=True)
 documents_col.create_index("application_id")
 objections_col.create_index("application_id")
-logs_col.create_index([("application_id", ASCENDING), ("at", ASCENDING)])
+logs_col.create_index("application_id", unique=True)
