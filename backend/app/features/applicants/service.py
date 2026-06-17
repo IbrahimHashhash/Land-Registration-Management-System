@@ -2,8 +2,8 @@ from datetime import datetime, timezone
 import uuid
 from pymongo.errors import DuplicateKeyError
 from fastapi import HTTPException
-from app.database import applicants_col, documents_col, logs_col
-from app.features.applicants.schemas import ApplicantCreate, DocumentUpload
+from app.database import applicants_col, documents_col, logs_col, applications_col
+from app.features.applicants.schemas import ApplicantCreate, DocumentUpload, CommentCreate
 
 
 def create_applicant(data: ApplicantCreate) -> dict:
@@ -66,3 +66,23 @@ def upload_document(application_id: str, data: DocumentUpload) -> dict:
         "meta": {"document_id": doc["document_id"], "document_type": data.document_type},
     })
     return doc
+
+
+def add_comment(application_id: str, data: CommentCreate) -> dict:
+    now = datetime.now(timezone.utc)
+    comment = {
+        "comment_id": "CMT-" + str(uuid.uuid4())[:8].upper(),
+        "application_id": application_id,
+        "author_id": data.author_id,
+        "author_role": "applicant",
+        "text": data.text,
+        "created_at": now,
+    }
+    # TODO: confirm field name with Student 1 — assuming comments array is at land_applications.comments
+    result = applications_col.update_one(
+        {"application_id": application_id},
+        {"$push": {"comments": comment}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Application not found")
+    return comment
