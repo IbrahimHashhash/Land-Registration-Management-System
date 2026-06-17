@@ -94,3 +94,10 @@ class ObjectionResponse(BaseModel):
     supporting_documents: List[str]
     status: str
     created_at: datetime
+
+class TimelineEvent(BaseModel):
+    event_type: str
+    actor_id: Optional[str]
+    actor_role: str
+    at: datetime
+    meta: Optional[dict] = None

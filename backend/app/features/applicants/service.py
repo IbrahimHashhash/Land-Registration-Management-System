@@ -121,3 +121,7 @@ def submit_objection(application_id: str ,data: ObjectionCreate) -> dict:
         "meta": {"objection_id": doc["objection_id"], "reason": data.reason},
     })
     return doc
+
+def get_timeline(application_id: str) -> list:
+    result = logs_col.find({"application_id" : application_id}).sort("at", 1)
+    return list(result)
