@@ -49,3 +49,10 @@ class ApplicantInternal(ApplicantPublic):
     on_status_change: bool
     on_missing_documents: bool
     on_certificate_ready: bool
+
+
+class DocumentUpload(BaseModel):
+    document_type: Literal["ownership_deed", "id_copy", "sale_contract", "survey_report", "power_of_attorney", "other"]
+    file_name: str
+    file_path: str
+
