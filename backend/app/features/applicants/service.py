@@ -3,7 +3,7 @@ import uuid
 from pymongo.errors import DuplicateKeyError
 from fastapi import HTTPException
 from app.database import applicants_col, documents_col, logs_col, applications_col, objections_col
-from app.features.applicants.schemas import ApplicantCreate, DocumentUpload, CommentCreate, ObjectionCreate
+from app.features.applicants.schemas import ApplicantCreate, DocumentUpload, CommentCreate, ObjectionCreate, ApplicationSummary
 
 
 def create_applicant(data: ApplicantCreate) -> dict:
@@ -124,4 +124,9 @@ def submit_objection(application_id: str ,data: ObjectionCreate) -> dict:
 
 def get_timeline(application_id: str) -> list:
     result = logs_col.find({"application_id" : application_id}).sort("at", 1)
+    return list(result)
+
+def get_applications_for_applicant(applicant_id: str) -> list:
+    # TODO: confirm field name with zaid — assuming applicant_ref.applicant_id
+    result = applications_col.find({"applicant_ref.applicant_id": applicant_id})
     return list(result)
