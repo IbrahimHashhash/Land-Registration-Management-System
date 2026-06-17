@@ -101,3 +101,9 @@ class TimelineEvent(BaseModel):
     actor_role: str
     at: datetime
     meta: Optional[dict] = None
+
+class ApplicationSummary(BaseModel):
+    application_id: str
+    status: str
+    application_type: str
+    submission_date: datetime
