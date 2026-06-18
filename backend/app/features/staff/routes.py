@@ -24,6 +24,12 @@ def get_staff(staff_id: str):
     return doc
 
 
+@router.get("/{staff_id}/tasks", response_model=list[SurveyTaskOut])
+def get_surveyor_tasks(staff_id: str):
+    tasks = service.get_tasks_by_surveyor(staff_id)
+    return [_serialize_task(t) for t in tasks]
+
+
 def _serialize_task(task: dict) -> dict:
     task["id"] = str(task["_id"])
     task["application_id"] = str(task["application_id"])
