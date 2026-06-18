@@ -61,3 +61,28 @@ class StaffOut(BaseModel):
     contacts: Contacts = Contacts()
     active: bool = True
     created_at: Optional[datetime] = None
+
+
+
+class Milestone(BaseModel):
+    type: str
+    at: datetime
+    by: str
+    meta: dict = {}
+
+
+class SurveyTaskOut(BaseModel):
+    id: str
+    task_id: str
+    application_id: str
+    parcel_id: str
+    assigned_surveyor_id: str
+    status: str
+    milestones: list[Milestone] = []
+    field_notes: list[str] = []
+    report_uploaded: bool = False
+    created_at: Optional[datetime] = None
+
+
+class ReassignRequest(BaseModel):
+    new_surveyor_id: str
