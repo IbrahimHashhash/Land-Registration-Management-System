@@ -86,3 +86,39 @@ class SurveyTaskOut(BaseModel):
 
 class ReassignRequest(BaseModel):
     new_surveyor_id: str
+
+
+
+MILESTONE_ORDER = [
+    "assigned",
+    "visit_scheduled",
+    "arrived_on_site",
+    "survey_started",
+    "survey_completed",
+    "report_uploaded",
+    "registrar_reviewed",
+]
+
+
+class MilestoneUpdate(BaseModel):
+    type: str = Field(..., pattern="^(visit_scheduled|arrived_on_site|survey_started|survey_completed)$")
+    by: str
+    meta: dict = {}
+
+
+class SurveyReportCreate(BaseModel):
+    report_title: str
+    file_path: Optional[str] = None
+    findings: Optional[str] = None
+    uploaded_by: str
+
+
+class SurveyReportOut(BaseModel):
+    id: str
+    task_id: str
+    application_id: str
+    report_title: str
+    file_path: Optional[str] = None
+    findings: Optional[str] = None
+    uploaded_by: str
+    uploaded_at: Optional[datetime] = None
