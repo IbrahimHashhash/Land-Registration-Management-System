@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from bson import ObjectId
-from app.features.staff.schemas import StaffCreate, StaffOut, SurveyTaskOut, ReassignRequest
+from app.features.staff.schemas import StaffCreate, StaffOut, SurveyTaskOut, ReassignRequest, MilestoneUpdate, SurveyReportCreate, SurveyReportOut
 from app.features.staff import service
 from app.features.staff.assignment import find_best_surveyor
 from app.database import applications_col
@@ -64,3 +64,22 @@ def reassign_surveyor(application_id: str, payload: ReassignRequest):
     if not task:
         raise HTTPException(status_code=404, detail="No survey task found for this application")
     return _serialize_task(task)
+
+
+
+@router.patch("/applications/{application_id}/survey-milestone", response_model=SurveyTaskOut)
+def update_survey_milestone(application_id: str, payload: MilestoneUpdate):
+    task = service.update_milestone(application_id, payload.type, payload.by, payload.meta)
+    if not task:
+        raise HTTPException(status_code=400, detail="Invalid milestone transition or no task found")
+    return _serialize_task(task)
+
+
+@router.post("/applications/{application_id}/survey-report", response_model=SurveyReportOut, status_code=201)
+def upload_survey_report(application_id: str, payload: SurveyReportCreate):
+    report = service.create_survey_report(application_id, payload.model_dump())
+    if not report:
+        raise HTTPException(status_code=404, detail="No survey task found for this application")
+    report["id"] = str(report["_id"])
+    report["application_id"] = str(report["application_id"])
+    return report

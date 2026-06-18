@@ -65,3 +65,61 @@ def reassign_survey_task(application_id: str, new_surveyor_id: str) -> dict | No
     )
 
     return survey_tasks_col.find_one({"_id": task["_id"]})
+
+
+
+def update_milestone(application_id: str, milestone_type: str, by: str, meta: dict) -> dict | None:
+    from app.features.staff.schemas import MILESTONE_ORDER
+
+    task = survey_tasks_col.find_one({"application_id": ObjectId(application_id)})
+    if not task:
+        return None
+
+    current_types = [m["type"] for m in task.get("milestones", [])]
+    current_index = max((MILESTONE_ORDER.index(t) for t in current_types if t in MILESTONE_ORDER), default=-1)
+    new_index = MILESTONE_ORDER.index(milestone_type)
+    if new_index <= current_index:
+        return None
+
+    now = datetime.now(timezone.utc)
+    milestone = {"type": milestone_type, "at": now, "by": by, "meta": meta}
+
+    survey_tasks_col.update_one(
+        {"_id": task["_id"]},
+        {"$set": {"status": milestone_type}, "$push": {"milestones": milestone}},
+    )
+    return survey_tasks_col.find_one({"_id": task["_id"]})
+
+
+def create_survey_report(application_id: str, data: dict) -> dict | None:
+    from app.database import survey_reports_col
+
+    task = survey_tasks_col.find_one({"application_id": ObjectId(application_id)})
+    if not task:
+        return None
+
+    now = datetime.now(timezone.utc)
+    report = {
+        "task_id": task["task_id"],
+        "application_id": ObjectId(application_id),
+        "report_title": data["report_title"],
+        "file_path": data.get("file_path"),
+        "findings": data.get("findings"),
+        "uploaded_by": data["uploaded_by"],
+        "uploaded_at": now,
+    }
+    result = survey_reports_col.insert_one(report)
+    report["_id"] = result.inserted_id
+
+    survey_tasks_col.update_one(
+        {"_id": task["_id"]},
+        {
+            "$set": {"status": "report_uploaded", "report_uploaded": True},
+            "$push": {"milestones": {"type": "report_uploaded", "at": now, "by": data["uploaded_by"], "meta": {}}},
+        },
+    )
+    applications_col.update_one(
+        {"_id": ObjectId(application_id)},
+        {"$set": {"status": "surveyed", "timestamps.surveyed_at": now, "timestamps.updated_at": now}},
+    )
+    return report
