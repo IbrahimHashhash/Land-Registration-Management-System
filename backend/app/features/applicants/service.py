@@ -55,6 +55,8 @@ def get_applicant(applicant_id: str) -> dict:
 
 
 def upload_document(application_id: str, data: DocumentUpload) -> dict:
+    if not applications_col.find_one({"application_id": application_id}):
+        raise HTTPException(status_code=404, detail="Application not found")
     now = datetime.now(timezone.utc)
     doc = {
         "document_id": "DOC-" + str(uuid.uuid4())[:8].upper(),
@@ -89,7 +91,6 @@ def add_comment(application_id: str, data: CommentCreate) -> dict:
         "text": data.text,
         "created_at": now,
     }
-    # TODO: confirm field name with Student 1 — assuming comments array is at land_applications.comments
     result = applications_col.update_one(
         {"application_id": application_id},
         {"$push": {"comments": comment}}

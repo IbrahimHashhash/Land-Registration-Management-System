@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import ApplicantShell from '../../components/ApplicantShell'
 import { useApplicant } from '../../context/ApplicantContext'
 import { getAppsForUser, getTrackData } from '../../data/applicantApps'
-import { getTimeline } from '../../api/applicant'
+import { getTimeline, addComment } from '../../api/applicant'
 
 const TYPE_LABELS = {
   submitted:         'Submitted',
@@ -54,6 +54,23 @@ export default function TrackApplication() {
 
   const [timeline, setTimeline]         = useState(staticData?.timeline || [])
   const [timelineLoading, setTimelineLoading] = useState(false)
+  const [commentText,   setCommentText]   = useState('')
+  const [commentStatus, setCommentStatus] = useState('idle') // idle | loading | success | error
+
+  async function handleComment() {
+    if (!commentText.trim()) return
+    setCommentStatus('loading')
+    try {
+      await addComment(app.id, {
+        author_id: user?.applicant_id || user?.id,
+        text: commentText.trim(),
+      })
+      setCommentStatus('success')
+      setCommentText('')
+    } catch {
+      setCommentStatus('error')
+    }
+  }
 
   useEffect(() => {
     if (!app?.id) return
@@ -220,6 +237,40 @@ export default function TrackApplication() {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* Add comment */}
+          <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
+            <div className="text-[14.5px] font-bold mb-[14px]">Add Comment</div>
+            {commentStatus === 'success' ? (
+              <div className="text-[13px] text-[#1f7a4d] font-semibold py-1">Comment submitted.</div>
+            ) : (
+              <>
+                <textarea
+                  value={commentText}
+                  onChange={e => { setCommentText(e.target.value); if (commentStatus === 'error') setCommentStatus('idle') }}
+                  placeholder="Write a comment or question for the registrar…"
+                  className="w-full min-h-[90px] border border-[#e3e8e5] rounded-[9px] px-[13px] py-[11px] text-[13px] outline-none resize-y leading-relaxed focus:border-[#1f5f4f] transition-colors mb-[12px]"
+                  style={{ fontFamily: 'inherit' }}
+                />
+                {commentStatus === 'error' && (
+                  <div className="mb-[10px] text-[12px] text-[#b91c1c]">Failed to submit. Please try again.</div>
+                )}
+                <button
+                  onClick={handleComment}
+                  disabled={commentStatus === 'loading' || !commentText.trim()}
+                  className="px-[18px] py-[9px] border-none rounded-[9px] bg-[#1f5f4f] text-white text-[13px] font-semibold cursor-pointer hover:bg-[#184c40] transition-colors disabled:opacity-60 disabled:cursor-wait flex items-center gap-2"
+                  style={{ fontFamily: 'inherit' }}
+                >
+                  {commentStatus === 'loading' ? (
+                    <>
+                      <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Submitting…
+                    </>
+                  ) : 'Submit Comment'}
+                </button>
+              </>
+            )}
           </div>
         </div>
 
