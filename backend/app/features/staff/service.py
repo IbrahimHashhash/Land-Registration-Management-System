@@ -123,3 +123,40 @@ def create_survey_report(application_id: str, data: dict) -> dict | None:
         {"$set": {"status": "surveyed", "timestamps.surveyed_at": now, "timestamps.updated_at": now}},
     )
     return report
+
+
+
+def registrar_review(application_id: str, decision: str, reviewed_by: str, notes: str | None, rejection_reason: str | None) -> dict | None:
+    app = applications_col.find_one({"_id": ObjectId(application_id)})
+    if not app:
+        return None
+
+    now = datetime.now(timezone.utc)
+    update: dict = {
+        "$set": {
+            "status": decision,
+            "assignment.assigned_registrar_id": reviewed_by,
+            "timestamps.updated_at": now,
+        }
+    }
+
+    if notes:
+        update.setdefault("$push", {})
+        update["$push"]["internal.notes"] = notes
+
+    if decision == "rejected" and rejection_reason:
+        update["$set"]["rejection_reason"] = rejection_reason
+
+    applications_col.update_one({"_id": ObjectId(application_id)}, update)
+
+    task = survey_tasks_col.find_one({"application_id": ObjectId(application_id)})
+    if task:
+        survey_tasks_col.update_one(
+            {"_id": task["_id"]},
+            {
+                "$set": {"status": "registrar_reviewed"},
+                "$push": {"milestones": {"type": "registrar_reviewed", "at": now, "by": reviewed_by, "meta": {"decision": decision}}},
+            },
+        )
+
+    return applications_col.find_one({"_id": ObjectId(application_id)})

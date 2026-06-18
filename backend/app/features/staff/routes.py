@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from bson import ObjectId
-from app.features.staff.schemas import StaffCreate, StaffOut, SurveyTaskOut, ReassignRequest, MilestoneUpdate, SurveyReportCreate, SurveyReportOut
+from app.features.staff.schemas import StaffCreate, StaffOut, SurveyTaskOut, ReassignRequest, MilestoneUpdate, SurveyReportCreate, SurveyReportOut, RegistrarReviewRequest
 from app.features.staff import service
 from app.features.staff.assignment import find_best_surveyor
 from app.database import applications_col
@@ -83,3 +83,13 @@ def upload_survey_report(application_id: str, payload: SurveyReportCreate):
     report["id"] = str(report["_id"])
     report["application_id"] = str(report["application_id"])
     return report
+
+
+@router.patch("/applications/{application_id}/registrar-review")
+def registrar_review(application_id: str, payload: RegistrarReviewRequest):
+    if payload.decision == "rejected" and not payload.rejection_reason:
+        raise HTTPException(status_code=400, detail="Rejection reason is required")
+    result = service.registrar_review(application_id, payload.decision, payload.reviewed_by, payload.notes, payload.rejection_reason)
+    if not result:
+        raise HTTPException(status_code=404, detail="Application not found")
+    return {"status": result["status"], "application_id": application_id}
