@@ -122,3 +122,11 @@ class SurveyReportOut(BaseModel):
     findings: Optional[str] = None
     uploaded_by: str
     uploaded_at: Optional[datetime] = None
+
+
+
+class RegistrarReviewRequest(BaseModel):
+    decision: str = Field(..., pattern="^(approved|rejected|on_hold|missing_documents|under_objection)$")
+    reviewed_by: str
+    notes: Optional[str] = None
+    rejection_reason: Optional[str] = None
