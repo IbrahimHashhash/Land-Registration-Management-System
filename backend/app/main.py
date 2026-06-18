@@ -4,6 +4,7 @@ import app.database
 from app.features.applicants.routes import router as applicants_router
 from app.features.applicants.application_routes import router as applications_router
 from app.features.staff.routes import router as staff_router
+from app.features.analytics.routes import router as analytics_router
 
 app = FastAPI(title="LRMIS API")
 
@@ -18,6 +19,7 @@ app.add_middleware(
 app.include_router(applicants_router)
 app.include_router(applications_router)
 app.include_router(staff_router)
+app.include_router(analytics_router)
 
 @app.get("/")
 def root():

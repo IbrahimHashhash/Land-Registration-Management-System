@@ -14,6 +14,10 @@ import SubmitApplication from './pages/applicant/SubmitApplication'
 import TrackApplication from './pages/applicant/TrackApplication'
 import UploadDocuments from './pages/applicant/UploadDocuments'
 import SubmitObjection from './pages/applicant/SubmitObjection'
+import SurveyorTaskList from './pages/surveyor/SurveyorTaskList'
+import SurveyorTaskExecution from './pages/surveyor/SurveyorTaskExecution'
+import LiveMap from './pages/surveyor/LiveMap'
+import AnalyticsDashboard from './pages/surveyor/AnalyticsDashboard'
 
 function ApplicantRoot() {
   return (
@@ -56,6 +60,12 @@ export default function App() {
           <Route path="upload"    element={<UploadDocuments />} />
           <Route path="objection" element={<SubmitObjection />} />
         </Route>
+
+        {/* Surveyor panel */}
+        <Route path="/surveyor" element={<SurveyorTaskList />} />
+        <Route path="/surveyor/task/:applicationId" element={<SurveyorTaskExecution />} />
+        <Route path="/surveyor/map" element={<LiveMap />} />
+        <Route path="/surveyor/analytics" element={<AnalyticsDashboard />} />
       </Routes>
     </BrowserRouter>
   )

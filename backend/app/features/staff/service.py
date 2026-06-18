@@ -14,6 +14,11 @@ def get_staff_by_id(staff_id: str) -> dict | None:
     return staff_col.find_one({"_id": ObjectId(staff_id)})
 
 
+def get_tasks_by_surveyor(staff_id: str) -> list:
+    return list(survey_tasks_col.find({"assigned_surveyor_id": ObjectId(staff_id)}))
+
+
+
 def create_survey_task(application_id: str, surveyor_id: str, parcel_id: str) -> dict:
     count = survey_tasks_col.count_documents({})
     task_id = f"SURV-2026-{count + 1:04d}"
