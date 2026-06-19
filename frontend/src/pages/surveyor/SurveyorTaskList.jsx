@@ -6,6 +6,17 @@ import { STATUS } from '../../theme'
 
 const SURVEYOR_ID = '675100000000000000000301'
 
+function scheduledVisitDate(milestones) {
+  const vs = milestones.find(m => m.type === 'visit_scheduled')
+  if (!vs) return '—'
+  return vs.meta?.scheduled_date || (vs.at ? vs.at.split('T')[0] : '—')
+}
+
+function currentMilestone(milestones) {
+  if (!milestones.length) return '—'
+  return milestones[milestones.length - 1].type.replace(/_/g, ' ')
+}
+
 export default function SurveyorTaskList() {
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
@@ -20,7 +31,7 @@ export default function SurveyorTaskList() {
   return (
     <SurveyorShell title="My Survey Tasks" subtitle="Assigned field survey tasks">
       {loading ? (
-        <p className="text-[13px] text-[#5e6b65]">Loading...</p>
+        <p className="text-[13px] text-[#5e6b65]">Loading…</p>
       ) : tasks.length === 0 ? (
         <p className="text-[13px] text-[#5e6b65]">No tasks assigned.</p>
       ) : (
@@ -31,17 +42,27 @@ export default function SurveyorTaskList() {
               <Link
                 key={task.id}
                 to={`/surveyor/task/${task.application_id}`}
-                className="block bg-white border border-[#e3e8e5] rounded-[13px] p-5 no-underline hover:border-[#1f5f4f]/30 transition-colors"
+                className="block bg-white border border-[#e3e8e5] rounded-[13px] p-5 no-underline hover:border-[#1f5f4f]/40 transition-colors"
               >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-semibold text-[14px] text-[#16201c]">{task.task_id}</span>
-                  <span className="text-[12px] font-medium px-2 py-0.5 rounded-full" style={{ color: st.fg, background: st.bg }}>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="font-semibold text-[14px] text-[#16201c] mono">{task.task_id}</span>
+                  <span className="text-[12px] font-medium px-2.5 py-0.5 rounded-full" style={{ color: st.fg, background: st.bg }}>
                     {st.label}
                   </span>
                 </div>
-                <div className="flex gap-6 text-[12.5px] text-[#5e6b65]">
-                  <span>Application: <span className="text-[#16201c] font-medium">{task.application_id}</span></span>
-                  <span>Milestones: {task.milestones.length}</span>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  {[
+                    ['Parcel Number', task.parcel_number || '—'],
+                    ['Zone', task.zone || '—'],
+                    ['Priority', task.priority || '—'],
+                    ['Scheduled Visit', scheduledVisitDate(task.milestones)],
+                    ['Current Milestone', currentMilestone(task.milestones)],
+                  ].map(([label, value]) => (
+                    <div key={label}>
+                      <div className="text-[10.5px] uppercase tracking-[.06em] text-[#8a988f] font-semibold mb-0.5">{label}</div>
+                      <div className="text-[13px] text-[#16201c] font-medium capitalize">{value}</div>
+                    </div>
+                  ))}
                 </div>
               </Link>
             )

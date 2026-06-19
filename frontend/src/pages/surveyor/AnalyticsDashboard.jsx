@@ -1,24 +1,47 @@
 import React, { useEffect, useState } from 'react'
 import SurveyorShell from '../../components/SurveyorShell'
 import api from '../../api/client'
+import { TYPES } from '../../theme'
+
+function MonthlyBars({ data, color }) {
+  if (!data.length) return <p className="text-[12.5px] text-[#5e6b65]">No data.</p>
+  const max = Math.max(...data.map(d => d.count), 1)
+  return (
+    <div className="flex items-end gap-3 h-[140px]">
+      {data.map(d => (
+        <div key={d.month} className="flex-1 flex flex-col items-center justify-end">
+          <span className="text-[11px] text-[#5e6b65] mb-1">{d.count}</span>
+          <div className="w-full rounded-t-[6px]" style={{ height: `${(d.count / max) * 100}%`, background: color, minHeight: '4px' }} />
+          <span className="text-[10.5px] text-[#8a988f] mt-1.5">{d.month}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 export default function AnalyticsDashboard() {
   const [kpis, setKpis] = useState(null)
-  const [byStatus, setByStatus] = useState({})
   const [byZone, setByZone] = useState({})
   const [surveyors, setSurveyors] = useState([])
+  const [overTime, setOverTime] = useState([])
+  const [processing, setProcessing] = useState([])
+  const [certsPerMonth, setCertsPerMonth] = useState([])
 
   useEffect(() => {
     api.get('/analytics/kpis').then(r => setKpis(r.data)).catch(() => {})
-    api.get('/analytics/applications-by-status').then(r => setByStatus(r.data)).catch(() => {})
     api.get('/analytics/applications-by-zone').then(r => setByZone(r.data)).catch(() => {})
     api.get('/analytics/surveyors').then(r => setSurveyors(r.data)).catch(() => {})
+    api.get('/analytics/applications-over-time').then(r => setOverTime(r.data)).catch(() => {})
+    api.get('/analytics/processing-time').then(r => setProcessing(r.data)).catch(() => {})
+    api.get('/analytics/certificates-per-month').then(r => setCertsPerMonth(r.data)).catch(() => {})
   }, [])
 
+  const maxZone = Math.max(...Object.values(byZone), 1)
+
   return (
-    <SurveyorShell title="Analytics Dashboard" subtitle="Operational insights and KPIs">
+    <SurveyorShell title="Analytics Dashboard" subtitle="Operational and spatial insights">
       {kpis && (
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           {[
             { label: 'Total Applications', value: kpis.total, color: '#1f5f4f' },
             { label: 'Pending', value: kpis.pending, color: '#b45309' },
@@ -33,15 +56,30 @@ export default function AnalyticsDashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-5 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
         <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-5">
-          <h3 className="text-[14px] font-semibold text-[#16201c] mb-3">Applications by Status</h3>
-          {Object.keys(byStatus).length > 0 ? (
-            <div className="space-y-2">
-              {Object.entries(byStatus).map(([status, count]) => (
-                <div key={status} className="flex items-center justify-between text-[13px]">
-                  <span className="text-[#384640] capitalize">{status.replace(/_/g, ' ')}</span>
-                  <span className="font-semibold text-[#16201c]">{count}</span>
+          <h3 className="text-[14px] font-semibold text-[#16201c] mb-4">Applications Over Time</h3>
+          <MonthlyBars data={overTime} color="#1f5f4f" />
+        </div>
+
+        <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-5">
+          <h3 className="text-[14px] font-semibold text-[#16201c] mb-4">Certificates Issued Per Month</h3>
+          <MonthlyBars data={certsPerMonth} color="#0e7490" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+        <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-5">
+          <h3 className="text-[14px] font-semibold text-[#16201c] mb-3">Pending Applications by Zone</h3>
+          {Object.keys(byZone).length > 0 ? (
+            <div className="space-y-2.5">
+              {Object.entries(byZone).map(([zone, count]) => (
+                <div key={zone} className="flex items-center gap-3">
+                  <span className="text-[12.5px] text-[#384640] w-28">{zone}</span>
+                  <div className="flex-1 bg-[#eef1f4] rounded-full h-[10px] overflow-hidden">
+                    <div className="h-full rounded-full bg-[#b45309]" style={{ width: `${(count / maxZone) * 100}%` }} />
+                  </div>
+                  <span className="text-[12px] text-[#5e6b65] w-8 text-right">{count}</span>
                 </div>
               ))}
             </div>
@@ -51,18 +89,18 @@ export default function AnalyticsDashboard() {
         </div>
 
         <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-5">
-          <h3 className="text-[14px] font-semibold text-[#16201c] mb-3">Pending by Zone</h3>
-          {Object.keys(byZone).length > 0 ? (
+          <h3 className="text-[14px] font-semibold text-[#16201c] mb-3">Average Processing Time</h3>
+          {processing.length > 0 ? (
             <div className="space-y-2">
-              {Object.entries(byZone).map(([zone, count]) => (
-                <div key={zone} className="flex items-center justify-between text-[13px]">
-                  <span className="text-[#384640]">{zone}</span>
-                  <span className="font-semibold text-[#16201c]">{count}</span>
+              {processing.map(p => (
+                <div key={p.application_type} className="flex items-center justify-between text-[13px]">
+                  <span className="text-[#384640]">{TYPES[p.application_type] || p.application_type}</span>
+                  <span className="font-semibold text-[#16201c]">{p.avg_days} days</span>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-[12.5px] text-[#5e6b65]">No data.</p>
+            <p className="text-[12.5px] text-[#5e6b65]">No approved applications yet.</p>
           )}
         </div>
       </div>
@@ -75,10 +113,7 @@ export default function AnalyticsDashboard() {
               <div key={s.staff_code} className="flex items-center gap-4">
                 <span className="text-[13px] font-medium text-[#16201c] w-40">{s.name}</span>
                 <div className="flex-1 bg-[#eef1f4] rounded-full h-[10px] overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-[#1f5f4f]"
-                    style={{ width: `${(s.active_tasks / s.max_tasks) * 100}%` }}
-                  />
+                  <div className="h-full rounded-full bg-[#1f5f4f]" style={{ width: `${(s.active_tasks / s.max_tasks) * 100}%` }} />
                 </div>
                 <span className="text-[12px] text-[#5e6b65] w-16 text-right">{s.active_tasks}/{s.max_tasks}</span>
               </div>
