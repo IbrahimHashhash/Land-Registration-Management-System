@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import SurveyorShell from '../../components/SurveyorShell'
-import { updateMilestone, uploadSurveyReport } from '../../api/staff'
-import api from '../../api/client'
+import { updateMilestone, uploadSurveyReport, addFieldNote, getMyTasks } from '../../api/staff'
 
 const MILESTONES = ['assigned', 'visit_scheduled', 'arrived_on_site', 'survey_started', 'survey_completed', 'report_uploaded']
 const SURVEYOR_ID = '675100000000000000000301'
@@ -18,7 +17,7 @@ export default function SurveyorTaskExecution() {
   useEffect(() => { fetchTask() }, [applicationId])
 
   function fetchTask() {
-    api.get(`/staff/${SURVEYOR_ID}/tasks`)
+    getMyTasks(SURVEYOR_ID)
       .then(res => {
         const t = res.data.find(t => t.application_id === applicationId)
         setTask(t || null)
@@ -45,6 +44,13 @@ export default function SurveyorTaskExecution() {
     await uploadSurveyReport(applicationId, { report_title: reportTitle, findings, uploaded_by: 'surveyor' })
     setReportTitle('')
     setFindings('')
+    fetchTask()
+  }
+
+  async function submitFieldNote() {
+    if (!fieldNote.trim()) return
+    await addFieldNote(applicationId, { note: fieldNote.trim(), by: 'surveyor' })
+    setFieldNote('')
     fetchTask()
   }
 
@@ -110,12 +116,28 @@ export default function SurveyorTaskExecution() {
       <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-6">
         <h3 className="text-[15px] font-semibold text-[#16201c] mb-3">Field Notes</h3>
         {task.field_notes.length > 0 ? (
-          <ul className="list-disc pl-5 text-[13px] text-[#384640] space-y-1 mb-3">
+          <ul className="list-disc pl-5 text-[13px] text-[#384640] space-y-1 mb-4">
             {task.field_notes.map((n, i) => <li key={i}>{n}</li>)}
           </ul>
         ) : (
-          <p className="text-[12.5px] text-[#5e6b65] mb-3">No field notes yet.</p>
+          <p className="text-[12.5px] text-[#5e6b65] mb-4">No field notes yet.</p>
         )}
+        <div className="flex gap-2">
+          <input
+            className="flex-1 border border-[#e3e8e5] rounded-[9px] px-3 py-2 text-[13px] outline-none focus:border-[#1f5f4f]"
+            placeholder="Add a field note…"
+            value={fieldNote}
+            onChange={e => setFieldNote(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') submitFieldNote() }}
+          />
+          <button
+            onClick={submitFieldNote}
+            disabled={!fieldNote.trim()}
+            className="px-4 py-[9px] text-[13px] font-semibold rounded-[9px] bg-[#1f5f4f] text-white border-none cursor-pointer hover:bg-[#184c40] disabled:opacity-50 transition-colors"
+          >
+            Add Note
+          </button>
+        </div>
       </div>
     </SurveyorShell>
   )

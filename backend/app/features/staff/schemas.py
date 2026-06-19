@@ -60,6 +60,7 @@ class StaffOut(BaseModel):
     workload: Workload = Workload()
     contacts: Contacts = Contacts()
     active: bool = True
+    performance: Optional[dict] = None
     created_at: Optional[datetime] = None
 
 
@@ -75,12 +76,15 @@ class SurveyTaskOut(BaseModel):
     id: str
     task_id: str
     application_id: str
-    parcel_id: str
+    parcel_id: Optional[str] = None
     assigned_surveyor_id: str
     status: str
     milestones: list[Milestone] = []
     field_notes: list[str] = []
     report_uploaded: bool = False
+    parcel_number: Optional[str] = None
+    zone: Optional[str] = None
+    priority: Optional[str] = None
     created_at: Optional[datetime] = None
 
 
@@ -130,3 +134,8 @@ class RegistrarReviewRequest(BaseModel):
     reviewed_by: str
     notes: Optional[str] = None
     rejection_reason: Optional[str] = None
+
+
+class FieldNoteCreate(BaseModel):
+    note: str
+    by: str = "surveyor"
