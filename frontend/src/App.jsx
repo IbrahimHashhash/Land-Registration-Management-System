@@ -4,6 +4,7 @@ import RegisterApplicant from './pages/RegisterApplicant'
 import ApplicantProfile from './pages/ApplicantProfile'
 import StaffDashboard from './pages/StaffDashboard'
 import ApplicationManagement from './pages/ApplicationManagement'
+import NewApplication from './pages/NewApplication'
 import ApplicationDetails from './pages/ApplicationDetails'
 import RegistrarReview from './pages/RegistrarReview'
 import CertificateIssuance from './pages/CertificateIssuance'
@@ -34,6 +35,7 @@ export default function App() {
         {/* Staff console */}
         <Route path="/"                    element={<StaffDashboard />} />
         <Route path="/applications"        element={<ApplicationManagement />} />
+        <Route path="/applications/new"    element={<NewApplication />} />
         <Route path="/applications/:id"    element={<ApplicationDetails />} />
         <Route path="/review/:id"          element={<RegistrarReview />} />
         <Route path="/certificates"        element={<CertificateIssuance />} />
