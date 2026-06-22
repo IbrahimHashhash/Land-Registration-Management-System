@@ -1,11 +1,25 @@
-import React, { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import React, { useState, useEffect, useMemo } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import AppShell from '../components/AppShell'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import { TYPES } from '../theme'
 import StatusBadge from '../components/ui/StatusBadge'
 import { listApplications } from '../api/applications'
+import { apiError } from '../utils/apiError'
+
+const PRIORITY_DOT = { high: '#dc2626', normal: '#9aa8a2', low: '#1e5fae' }
+
+const DONE_STATES = ['approved', 'certificate_issued', 'closed']
+
+function KpiCard({ label, value, color }) {
+  return (
+    <Card className="px-[18px] py-[15px]">
+      <div className="text-[12px] text-[#5e6b65] mb-1">{label}</div>
+      <div className="text-[24px] font-bold leading-none" style={{ color: color || '#16201c' }}>{value}</div>
+    </Card>
+  )
+}
 
 const PAGE_SIZE = 8
 
@@ -47,8 +61,36 @@ export default function ApplicationManagement() {
   const [totalPages, setTotalPages] = useState(1)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
+  const [stats, setStats] = useState(null)
+  const navigate = useNavigate()
 
   useEffect(() => { setPage(1) }, [search, statusFilter, typeFilter, zoneFilter])
+
+  useEffect(() => {
+    let active = true
+    listApplications({ page: 1, page_size: 500 })
+      .then(res => {
+        if (!active) return
+        const by = {}
+        res.data.items.forEach(a => { by[a.status] = (by[a.status] || 0) + 1 })
+        setStats({ total: res.data.total, by })
+      })
+      .catch(() => active && setStats(null))
+    return () => { active = false }
+  }, [reloadKey])
+
+  const kpis = useMemo(() => {
+    if (!stats) return null
+    const by = stats.by
+    const sum = keys => keys.reduce((n, k) => n + (by[k] || 0), 0)
+    return {
+      total: stats.total,
+      done: sum(DONE_STATES),
+      inProgress: stats.total - sum([...DONE_STATES, 'rejected']),
+      rejected: by.rejected || 0,
+    }
+  }, [stats])
 
   useEffect(() => {
     let active = true
@@ -66,16 +108,25 @@ export default function ApplicationManagement() {
         setTotal(res.data.total)
         setTotalPages(res.data.total_pages)
       })
-      .catch(() => active && setError('Could not load applications. Is the backend running?'))
+      .catch((e) => active && setError(apiError(e, 'Could not load applications.')))
       .finally(() => active && setLoading(false))
     return () => { active = false }
-  }, [search, statusFilter, typeFilter, zoneFilter, page])
+  }, [search, statusFilter, typeFilter, zoneFilter, page, reloadKey])
 
   const firstItem = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
   const lastItem = Math.min(page * PAGE_SIZE, total)
 
   return (
     <AppShell title="Applications" subtitle={`${total} application${total === 1 ? '' : 's'}`}>
+      {kpis && (
+        <div className="grid grid-cols-4 gap-4 mb-5">
+          <KpiCard label="Total Applications" value={kpis.total} />
+          <KpiCard label="In Progress" value={kpis.inProgress} color="#b45309" />
+          <KpiCard label="Approved / Issued" value={kpis.done} color="#1f7a4d" />
+          <KpiCard label="Rejected" value={kpis.rejected} color="#b91c1c" />
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-3 mb-5">
         <div className="flex items-center gap-2 bg-white border border-[#e3e8e5] rounded-[9px] px-3 py-[9px] min-w-[280px]">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9aa8a2" strokeWidth="2">
@@ -127,11 +178,20 @@ export default function ApplicationManagement() {
             </thead>
             <tbody>
               {!loading && items.map((app, i) => (
-                <tr key={app.application_id} className={`border-b border-[#f0f3f1] hover:bg-[#f8faf9] transition-colors ${i === items.length - 1 ? 'border-b-0' : ''}`}>
+                <tr
+                  key={app.application_id}
+                  onClick={() => navigate(`/applications/${app.application_id}`)}
+                  className={`border-b border-[#f0f3f1] hover:bg-[#f8faf9] transition-colors cursor-pointer ${i === items.length - 1 ? 'border-b-0' : ''}`}
+                >
                   <td className="px-5 py-[14px]">
-                    <Link to={`/applications/${app.application_id}`} className="mono text-[13px] font-medium text-[#1f5f4f] no-underline hover:underline">
-                      {app.application_id}
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="w-[7px] h-[7px] rounded-full shrink-0"
+                        style={{ background: PRIORITY_DOT[app.priority] || PRIORITY_DOT.normal }}
+                        title={`${app.priority || 'normal'} priority`}
+                      />
+                      <span className="mono text-[13px] font-medium text-[#1f5f4f] hover:underline">{app.application_id}</span>
+                    </div>
                   </td>
                   <td className="px-5 py-[14px] text-[13px] text-[#384640]">{TYPES[app.application_type] || app.application_type}</td>
                   <td className="px-5 py-[14px]">
@@ -152,7 +212,15 @@ export default function ApplicationManagement() {
           </table>
 
           {loading && <div className="px-5 py-10 text-center text-[13px] text-[#5e6b65]">Loading applications…</div>}
-          {!loading && error && <div className="px-5 py-10 text-center text-[13px] text-[#b91c1c]">{error}</div>}
+          {!loading && error && (
+            <div className="px-5 py-10 flex flex-col items-center gap-3">
+              <div className="text-[13px] text-[#b91c1c] text-center max-w-[460px]">{error}</div>
+              <Button variant="ghost" size="sm" onClick={() => setReloadKey(k => k + 1)}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                Retry
+              </Button>
+            </div>
+          )}
           {!loading && !error && items.length === 0 && <div className="px-5 py-10 text-center text-[13px] text-[#5e6b65]">No applications found</div>}
         </div>
 

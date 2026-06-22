@@ -5,6 +5,7 @@ import Button from '../components/ui/Button'
 import { TYPES } from '../theme'
 import StatusBadge from '../components/ui/StatusBadge'
 import { listApplications, listCertificates, issueCertificate } from '../api/applications'
+import { apiError } from '../utils/apiError'
 
 function fmtDate(value) {
   if (!value) return '—'
@@ -37,6 +38,8 @@ export default function CertificateIssuance() {
   const [names, setNames] = useState({})
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
+  const [msgType, setMsgType] = useState('success')
+  const [nameErr, setNameErr] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -48,24 +51,32 @@ export default function CertificateIssuance() {
         setApproved(apps.data.items)
         setCertificates(certs.data)
       })
-      .catch(() => setError('Could not load certificates. Is the backend running?'))
+      .catch((e) => setError(apiError(e, 'Could not load certificates.')))
       .finally(() => setLoading(false))
   }, [])
 
   useEffect(() => { load() }, [load])
 
   const generate = async (app) => {
-    const full_name = names[app.application_id]
-    if (!full_name) { setMsg('Enter the owner name first'); return }
+    const full_name = (names[app.application_id] || '').trim()
+    if (!full_name) {
+      setNameErr(app.application_id)
+      setMsgType('error')
+      setMsg(`Enter the owner full name for ${app.application_id} before generating.`)
+      return
+    }
+    setNameErr('')
     setBusy(true)
     setMsg('')
     try {
       const res = await issueCertificate(app.application_id, { full_name, issued_by: 'registrar' })
-      setMsg(`Issued ${res.data.certificate_id}`)
+      setMsgType('success')
+      setMsg(`Certificate ${res.data.certificate_id} issued for ${app.application_id}.`)
       setSelected(res.data.certificate_id)
       load()
     } catch (e) {
-      setMsg(e.response?.data?.detail || 'Could not issue certificate')
+      setMsgType('error')
+      setMsg(apiError(e, 'Could not issue certificate'))
     } finally {
       setBusy(false)
     }
@@ -98,15 +109,22 @@ export default function CertificateIssuance() {
                       <div className="text-[12px] text-[#5e6b65] mb-3">
                         {TYPES[app.application_type] || app.application_type} · <span className="mono">{app.applicant_ref?.applicant_id}</span>
                       </div>
+                      <div className="text-[12px] text-[#5e6b65] mb-1">Owner full name<span className="text-[#dc2626]"> *</span></div>
                       <div className="flex gap-2">
                         <input
-                          className="flex-1 border border-[#e3e8e5] rounded-[9px] px-3 py-[8px] text-[12.5px] font-[inherit] outline-none bg-white focus:border-[#1f5f4f] transition-colors"
+                          className={`flex-1 border rounded-[9px] px-3 py-[8px] text-[12.5px] font-[inherit] outline-none bg-white transition-colors ${nameErr === app.application_id ? 'border-[#dc2626] focus:border-[#dc2626]' : 'border-[#e3e8e5] focus:border-[#1f5f4f]'}`}
                           placeholder="Owner full name"
                           value={names[app.application_id] || ''}
-                          onChange={e => setNames(n => ({ ...n, [app.application_id]: e.target.value }))}
+                          onChange={e => {
+                            if (nameErr === app.application_id) setNameErr('')
+                            setNames(n => ({ ...n, [app.application_id]: e.target.value }))
+                          }}
                         />
                         <Button variant="primary" size="sm" disabled={busy} onClick={() => generate(app)}>Generate</Button>
                       </div>
+                      {nameErr === app.application_id && (
+                        <div className="text-[11.5px] text-[#b91c1c] mt-[6px]">Owner full name is required to generate the certificate.</div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -141,7 +159,7 @@ export default function CertificateIssuance() {
           </div>
 
           <div className="flex flex-col gap-5">
-            {msg && <div className="text-[12.5px] text-[#1f5f4f] bg-[#eef6f2] border border-[#d6e7df] rounded-[8px] px-3 py-2">{msg}</div>}
+            {msg && <div className={`text-[12.5px] border rounded-[8px] px-3 py-2 ${msgType === 'error' ? 'text-[#b91c1c] bg-[#fbe6e6] border-[#f0c4c4]' : 'text-[#1f7a4d] bg-[#e2f3e9] border-[#cfe8da]'}`}>{msg}</div>}
             <Card className="p-[22px]">
               <div className="text-[14px] font-bold text-[#16201c] mb-5">Certificate Preview</div>
               {!cert ? (
