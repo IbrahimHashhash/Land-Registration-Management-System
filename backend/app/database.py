@@ -1,4 +1,4 @@
-from pymongo import MongoClient, ASCENDING
+from pymongo import MongoClient, ASCENDING, GEOSPHERE
 from dotenv import load_dotenv
 import os
 
@@ -15,10 +15,32 @@ applications_col = db["land_applications"]
 staff_col        = db["staff_members"]
 survey_tasks_col = db["survey_tasks"]
 survey_reports_col = db["survey_reports"]
+parcels_col      = db["parcels"]
+certificates_col = db["certificates"]
 
-applicants_col.create_index("identity.national_id", unique=True)
-documents_col.create_index("application_id")
-objections_col.create_index("application_id")
-logs_col.create_index("application_id", unique=True)
-staff_col.create_index("staff_code", unique=True)
-survey_tasks_col.create_index("application_id")
+
+def _ensure_index(col, keys, **kwargs):
+    try:
+        col.create_index(keys, **kwargs)
+    except Exception:
+        pass
+
+
+_ensure_index(applicants_col, "identity.national_id", unique=True)
+_ensure_index(documents_col, "application_id")
+_ensure_index(objections_col, "application_id")
+_ensure_index(logs_col, "application_id", unique=True)
+_ensure_index(staff_col, "staff_code", unique=True)
+_ensure_index(survey_tasks_col, "application_id")
+
+_ensure_index(applications_col, "application_id", unique=True)
+_ensure_index(applications_col, "status")
+_ensure_index(applications_col, "application_type")
+_ensure_index(applications_col, "parcel.zone_id")
+_ensure_index(applications_col, "submission_date")
+
+_ensure_index(parcels_col, "parcel_code", unique=True)
+_ensure_index(parcels_col, "zone_id")
+_ensure_index(parcels_col, [("geometry", GEOSPHERE)])
+
+_ensure_index(certificates_col, "certificate_id", unique=True)
