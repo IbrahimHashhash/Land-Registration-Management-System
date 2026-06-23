@@ -1,8 +1,19 @@
-import React from 'react'
+import React, { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import TopBar from './TopBar'
+import { getStaff } from '../context/staffSession'
 
 export default function AppShell({ title, subtitle, children }) {
+  const navigate = useNavigate()
+  const staff = getStaff()
+
+  useEffect(() => {
+    if (!staff) navigate('/staff/login', { replace: true })
+  }, [staff, navigate])
+
+  if (!staff) return null
+
   return (
     <div className="flex min-h-screen bg-[#f4f6f5]">
       <Sidebar />

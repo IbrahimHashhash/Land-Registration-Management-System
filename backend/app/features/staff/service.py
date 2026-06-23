@@ -28,6 +28,13 @@ def create_staff(data: dict) -> dict:
     return data
 
 
+def list_staff(role: str | None = None) -> list:
+    query: dict = {}
+    if role:
+        query["role"] = role
+    return list(staff_col.find(query).sort("name", 1))
+
+
 def get_staff_by_id(staff_id: str) -> dict | None:
     staff = staff_col.find_one({"_id": ObjectId(staff_id)})
     if not staff:
@@ -189,6 +196,14 @@ def registrar_review(application_id: str, decision: str, reviewed_by: str, notes
     app = applications_col.find_one({"application_id": application_id})
     if not app:
         return None
+
+    current = app.get("status")
+    if decision != current and decision not in ALLOWED_NEXT.get(current, []):
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot move from {current} to {decision}",
+        )
 
     now = datetime.now(timezone.utc)
     update: dict = {

@@ -1,25 +1,68 @@
-import React, { useState, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ApplicantShell from '../../components/ApplicantShell'
 import { useApplicant } from '../../context/ApplicantContext'
-import { getAppsForUser, getObjectionsForUser } from '../../data/applicantApps'
-import { submitObjection } from '../../api/applicant'
+import {
+  getApplicantApplications,
+  getApplicantObjections,
+  submitObjection,
+} from '../../api/applicant'
 import FormSelect from '../../components/ui/FormSelect'
+import { TYPES } from '../../theme'
+
+const OBJ_STATUS_BADGE = {
+  pending:    { label: 'Pending',    fg: '#b45309', bg: '#fbeedd' },
+  reviewing:  { label: 'Under Review', fg: '#be123c', bg: '#fbe4ea' },
+  resolved:   { label: 'Resolved',   fg: '#1f7a4d', bg: '#e2f3e9' },
+  dismissed:  { label: 'Dismissed',  fg: '#475569', bg: '#eef1f4' },
+}
+
+function formatDate(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
 
 export default function SubmitObjection() {
   const { user } = useApplicant()
   const navigate = useNavigate()
-  const apps = getAppsForUser(user?.id)
-  const existingObjections = getObjectionsForUser(user?.id)
+
+  const [apps, setApps] = useState([])
+  const [appsLoading, setAppsLoading] = useState(true)
+  const [existingObjections, setExistingObjections] = useState([])
+  const [objLoading, setObjLoading] = useState(true)
 
   const [selectedAppIdx, setSelectedAppIdx] = useState(0)
   const [reason,  setReason]  = useState('')
-  const [status,  setStatus]  = useState('idle') // idle | loading | success | error
+  const [status,  setStatus]  = useState('idle')
   const [errMsg,  setErrMsg]  = useState('')
-  const [attachments, setAttachments] = useState([]) // file names (metadata only)
+  const [attachments, setAttachments] = useState([])
   const fileRef = useRef(null)
 
   const selectedApp = apps[selectedAppIdx]
+
+  useEffect(() => {
+    if (!user?.applicant_id) { setAppsLoading(false); setObjLoading(false); return }
+    setAppsLoading(true)
+    getApplicantApplications(user.applicant_id)
+      .then(list => setApps(list || []))
+      .catch(() => setApps([]))
+      .finally(() => setAppsLoading(false))
+  }, [user?.applicant_id])
+
+  function refreshObjections() {
+    if (!user?.applicant_id) return
+    setObjLoading(true)
+    getApplicantObjections(user.applicant_id)
+      .then(list => setExistingObjections(list || []))
+      .catch(() => setExistingObjections([]))
+      .finally(() => setObjLoading(false))
+  }
+
+  useEffect(() => {
+    refreshObjections()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.applicant_id])
 
   function handleFileChange(e) {
     const names = Array.from(e.target.files || []).map(f => f.name)
@@ -32,6 +75,11 @@ export default function SubmitObjection() {
   }
 
   async function handleSubmit() {
+    if (!selectedApp) {
+      setErrMsg('Please select an application.')
+      setStatus('error')
+      return
+    }
     if (!reason.trim()) {
       setErrMsg('Please describe your objection.')
       setStatus('error')
@@ -40,12 +88,15 @@ export default function SubmitObjection() {
     setStatus('loading')
     setErrMsg('')
     try {
-      await submitObjection(selectedApp.id, {
-        author_id: user.applicant_id || user.id,
+      await submitObjection(selectedApp.application_id, {
+        author_id: user.applicant_id,
         reason: reason.trim(),
         supporting_documents: attachments,
       })
       setStatus('success')
+      setReason('')
+      setAttachments([])
+      refreshObjections()
     } catch (err) {
       const detail = err.response?.data?.detail
       if (err.response?.status === 404) {
@@ -74,14 +125,22 @@ export default function SubmitObjection() {
           <div className="flex flex-col gap-[16px]">
             <div>
               <label className="text-[12px] font-semibold text-[#384640] block mb-[6px]">Application *</label>
-              <FormSelect
-                value={selectedAppIdx}
-                onChange={e => { setSelectedAppIdx(Number(e.target.value)); setStatus('idle') }}
-              >
-                {apps.map((a, i) => (
-                  <option key={a.id} value={i}>{a.id} · {a.typeLabel} · Parcel {a.parcel}</option>
-                ))}
-              </FormSelect>
+              {appsLoading ? (
+                <div className="text-[12.5px] text-[#9aa8a2]">Loading applications…</div>
+              ) : apps.length === 0 ? (
+                <div className="text-[12.5px] text-[#9aa8a2]">You have no applications to file an objection against.</div>
+              ) : (
+                <FormSelect
+                  value={selectedAppIdx}
+                  onChange={e => { setSelectedAppIdx(Number(e.target.value)); setStatus('idle') }}
+                >
+                  {apps.map((a, i) => (
+                    <option key={a.application_id} value={i}>
+                      {a.application_id} · {TYPES[a.application_type] || a.application_type}
+                    </option>
+                  ))}
+                </FormSelect>
+              )}
             </div>
 
             <div>
@@ -172,7 +231,7 @@ export default function SubmitObjection() {
                 </button>
                 <button
                   onClick={handleSubmit}
-                  disabled={status === 'loading'}
+                  disabled={status === 'loading' || apps.length === 0}
                   className="flex-1 py-[11px] border-none rounded-[9px] bg-[#be123c] text-white text-[13.5px] font-semibold cursor-pointer hover:bg-[#9f1239] transition-colors disabled:opacity-60 disabled:cursor-wait flex items-center justify-center gap-2"
                   style={{ fontFamily: 'inherit' }}
                 >
@@ -188,34 +247,40 @@ export default function SubmitObjection() {
           )}
         </div>
 
-        {/* Existing objections */}
         <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
           <div className="text-[14.5px] font-bold mb-[14px]">My Objections</div>
-          {existingObjections.length === 0 ? (
+          {objLoading ? (
+            <div className="text-[13px] text-[#9aa8a2] py-[8px]">Loading…</div>
+          ) : existingObjections.length === 0 ? (
             <div className="text-[13px] text-[#9aa8a2] py-[8px]">No objections filed yet.</div>
-          ) : existingObjections.map(obj => (
-            <div key={obj.id} className="flex items-center gap-[13px] p-[14px] border border-[#eef1ef] rounded-[11px]">
-              <div className="w-[40px] h-[40px] rounded-[9px] bg-[#fbe4ea] flex items-center justify-center shrink-0">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#be123c" strokeWidth="2">
-                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                  <line x1="12" y1="9" x2="12" y2="13"/>
-                  <line x1="12" y1="17" x2="12.01" y2="17"/>
-                </svg>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-[9px]">
-                  <span className="mono text-[13px] font-semibold">{obj.id}</span>
-                  <span
-                    className="text-[10.5px] font-semibold px-[9px] py-[3px] rounded-full"
-                    style={{ color: obj.statusFg, background: obj.statusBg }}
-                  >
-                    {obj.status}
-                  </span>
+          ) : existingObjections.map(obj => {
+            const badge = OBJ_STATUS_BADGE[obj.status] ||
+              { label: obj.status, fg: '#475569', bg: '#eef1f4' }
+            return (
+              <div key={obj.objection_id} className="flex items-center gap-[13px] p-[14px] border border-[#eef1ef] rounded-[11px] mb-[8px] last:mb-0">
+                <div className="w-[40px] h-[40px] rounded-[9px] bg-[#fbe4ea] flex items-center justify-center shrink-0">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#be123c" strokeWidth="2">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                    <line x1="12" y1="9" x2="12" y2="13"/>
+                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                  </svg>
                 </div>
-                <div className="text-[12.5px] text-[#5e6b65] mt-1">{obj.desc}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-[9px]">
+                    <span className="mono text-[13px] font-semibold">{obj.application_id}</span>
+                    <span
+                      className="text-[10.5px] font-semibold px-[9px] py-[3px] rounded-full"
+                      style={{ color: badge.fg, background: badge.bg }}
+                    >
+                      {badge.label}
+                    </span>
+                  </div>
+                  <div className="text-[12.5px] text-[#5e6b65] mt-1 line-clamp-2">{obj.reason}</div>
+                  <div className="text-[11px] text-[#9aa8a2] mt-1">Filed {formatDate(obj.created_at)}</div>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </ApplicantShell>

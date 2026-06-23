@@ -80,6 +80,11 @@ class DocumentResponse(BaseModel):
     uploaded_at: datetime
 
 
+class DocumentVerify(BaseModel):
+    verification_status: Literal["verified", "pending_review", "rejected"]
+    by: Optional[str] = None
+
+
 class CommentCreate(BaseModel):
     author_id: str
     text: str

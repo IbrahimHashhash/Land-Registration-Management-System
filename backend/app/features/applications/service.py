@@ -10,6 +10,9 @@ from app.features.applications.schemas import (
     ApplicationCreate, TransitionRequest, HoldRequest, RejectRequest, CertificateRequest,
 )
 from app.utils.ids import next_application_id, next_certificate_id
+from app.utils.notifications import (
+    notify_status_change, notify_missing_documents, notify_certificate_ready,
+)
 
 ALL_STATUSES = "All Statuses"
 ALL_TYPES = "All Types"
@@ -164,14 +167,16 @@ def _check_rules(app: dict, target: str) -> None:
     if target == "survey_required":
         if not parcel.get("parcel_no") or not parcel.get("zone_id"):
             raise HTTPException(status_code=400, detail="Parcel location is not valid")
+        geometry = parcel.get("geometry") or {}
+        if not geometry or not geometry.get("type") or not geometry.get("coordinates"):
+            raise HTTPException(status_code=400, detail="Parcel location is not valid: geometry is required")
 
     if target == "surveyed":
         if not survey_reports_col.find_one({"application_id": application_id}):
             raise HTTPException(status_code=400, detail="A survey report is required before marking surveyed")
 
     if target == "legal_review":
-        has_docs = documents_col.count_documents({"application_id": application_id}) > 0
-        if not has_docs and not app.get("required_documents"):
+        if documents_col.count_documents({"application_id": application_id}) == 0:
             raise HTTPException(status_code=400, detail="Ownership documents must be uploaded before legal review")
 
 
@@ -205,6 +210,13 @@ def transition(application_id: str, data: TransitionRequest) -> dict:
 
     applications_col.update_one({"application_id": application_id}, update)
     _log_event(application_id, target, "staff", data.actor_id, {"from": current, "note": data.note})
+
+    applicant_id = (app.get("applicant_ref") or {}).get("applicant_id")
+    if target == "missing_documents":
+        notify_missing_documents(applicant_id, application_id)
+    else:
+        notify_status_change(applicant_id, application_id, target)
+
     return _public(applications_col.find_one({"application_id": application_id}))
 
 
@@ -296,4 +308,8 @@ def issue_certificate(application_id: str, data: CertificateRequest) -> dict:
         }},
     )
     _log_event(application_id, "certificate_issued", "registrar", data.issued_by, {"certificate_id": certificate_id})
+
+    applicant_id = (app.get("applicant_ref") or {}).get("applicant_id")
+    notify_certificate_ready(applicant_id, application_id, certificate_id)
+
     return _public(cert)

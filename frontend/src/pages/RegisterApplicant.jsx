@@ -1,32 +1,25 @@
 import React, { useState } from 'react'
-import axios from 'axios'
-
-const API = import.meta.env.VITE_API_URL
+import { registerApplicant } from '../api/applicant'
+import { apiError } from '../utils/apiError'
 
 export default function RegisterApplicant() {
   const [form, setForm] = useState({
-    full_name: '',
-    national_id: '',
-    applicant_type: 'citizen',
+    name: '',
+    nationalId: '',
+    applicantType: 'citizen',
     email: '',
     phone: '',
     city: '',
-    neighborhood: '',
     address: '',
-    zone_id: '',
-    preferred_language: 'ar',
-    preferred_contact: 'email',
-    notify_by_email: true,
-    notify_by_sms: false,
-    profile_public: false,
+    zoneId: '',
   })
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
 
   const handleChange = (e) => {
-    const { name, value, type, checked } = e.target
-    setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }))
+    const { name, value } = e.target
+    setForm(prev => ({ ...prev, [name]: value }))
   }
 
   const handleSubmit = async (e) => {
@@ -34,10 +27,22 @@ export default function RegisterApplicant() {
     setError(null)
     setLoading(true)
     try {
-      const res = await axios.post(`${API}/applicants/`, form)
-      setResult(res.data)
+      // registerApplicant() builds the nested identity/contacts/address/preferences payload.
+      const data = await registerApplicant({
+        name: form.name,
+        applicantType: form.applicantType,
+        nationalId: form.nationalId,
+        verified: false,
+        verificationMethod: 'otp_stub',
+        email: form.email,
+        phone: form.phone,
+        city: form.city,
+        address: form.address,
+        zoneId: form.zoneId,
+      })
+      setResult(data)
     } catch (err) {
-      setError(err.response?.data?.detail || 'Something went wrong')
+      setError(apiError(err, 'Something went wrong'))
     } finally {
       setLoading(false)
     }
@@ -74,19 +79,19 @@ export default function RegisterApplicant() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-            <input name="full_name" placeholder="Yazan Sulaiman" onChange={handleChange} required
+            <input name="name" value={form.name} placeholder="Yazan Sulaiman" onChange={handleChange} required
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">National ID</label>
-            <input name="national_id" placeholder="123456789" onChange={handleChange} required
+            <input name="nationalId" value={form.nationalId} placeholder="123456789" onChange={handleChange} required
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Applicant Type</label>
-            <select name="applicant_type" onChange={handleChange}
+            <select name="applicantType" value={form.applicantType} onChange={handleChange}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="citizen">Citizen</option>
               <option value="lawyer">Lawyer</option>
@@ -99,12 +104,12 @@ export default function RegisterApplicant() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input name="email" type="email" placeholder="you@email.com" onChange={handleChange} required
+              <input name="email" value={form.email} type="email" placeholder="you@email.com" onChange={handleChange} required
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-              <input name="phone" placeholder="05xxxxxxxx" onChange={handleChange} required
+              <input name="phone" value={form.phone} placeholder="+97059..." onChange={handleChange} required
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
@@ -112,25 +117,19 @@ export default function RegisterApplicant() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-              <input name="city" placeholder="Ramallah" onChange={handleChange} required
+              <input name="city" value={form.city} placeholder="Ramallah" onChange={handleChange} required
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Neighborhood</label>
-              <input name="neighborhood" placeholder="Al-Bireh" onChange={handleChange} required
+              <input name="address" value={form.address} placeholder="Al-Bireh" onChange={handleChange} required
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-            <input name="address" placeholder="Street 5, Building 3" onChange={handleChange} required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-
-          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Zone ID</label>
-            <input name="zone_id" placeholder="ZONE-RM-01" onChange={handleChange} required
+            <input name="zoneId" value={form.zoneId} placeholder="ZONE-RM-01" onChange={handleChange} required
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
 

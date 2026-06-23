@@ -1,5 +1,6 @@
 import React from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { getSurveyor, setSurveyor } from '../context/surveyorSession'
 
 const NAV = [
   {
@@ -18,9 +19,18 @@ const NAV = [
 
 export default function SurveyorShell({ title, subtitle, children }) {
   const location = useLocation()
+  const navigate = useNavigate()
+  const surveyor = getSurveyor()
+  const surveyorName = surveyor?.name || 'Survey Team'
+  const surveyorInitials = (surveyorName || '?').split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase()).join('') || 'SA'
 
   function isActive(nav) {
     return nav.exact ? location.pathname === nav.to : location.pathname.startsWith(nav.to)
+  }
+
+  function signOut() {
+    setSurveyor(null)
+    navigate('/surveyor/login')
   }
 
   return (
@@ -63,12 +73,23 @@ export default function SurveyorShell({ title, subtitle, children }) {
 
         <div className="mt-auto border-t border-white/10 pt-3 flex items-center gap-[10px]">
           <div className="w-8 h-8 rounded-lg bg-[#e7f1ee] text-[#1f5f4f] flex items-center justify-center font-bold text-[13px] shrink-0">
-            SA
+            {surveyorInitials}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-[12.5px] font-semibold text-white truncate">Survey Team A</div>
+            <div className="text-[12.5px] font-semibold text-white truncate">{surveyorName}</div>
             <div className="text-[11px] text-[#8a988f]">Surveyor</div>
           </div>
+          <button
+            onClick={signOut}
+            title="Sign out"
+            className="text-[#8a988f] hover:text-white flex transition-colors cursor-pointer bg-transparent border-none p-0"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </button>
         </div>
       </aside>
 

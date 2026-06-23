@@ -1,0 +1,84 @@
+[
+  {
+    "application_id": "LRMIS-2026-0001",
+    "application_type": "ownership_transfer",
+    "status": "pre_checked",
+    "priority": "normal",
+    "applicant_ref": {
+      "applicant_id": "APP-DEMO0001",
+      "applicant_type": "citizen",
+      "submitted_by_representative": false
+    },
+    "parcel": {
+      "parcel_no": "145", "block_no": "12", "basin_no": "3", "zone_id": "ZONE-RM-01",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[35.2001, 31.9021], [35.2015, 31.9021], [35.2015, 31.9030], [35.2001, 31.9030], [35.2001, 31.9021]]]
+      }
+    },
+    "description": "Ownership transfer for parcel 145, block 12.",
+    "tags": ["ownership_transfer", "requires_legal_review"],
+    "workflow": {
+      "current_state": "pre_checked",
+      "allowed_next": ["survey_required", "legal_review", "missing_documents", "on_hold", "rejected"],
+      "transition_rules_version": "v1.0"
+    },
+    "required_documents": [
+      { "document_type": "ownership_deed", "required": true, "status": "verified" },
+      { "document_type": "id_copy",        "required": true, "status": "verified" },
+      { "document_type": "sale_contract",  "required": true, "status": "pending_review" }
+    ],
+    "timestamps": {
+      "submitted_at": "2026-02-01T09:00:00Z",
+      "pre_checked_at": "2026-02-01T10:00:00Z",
+      "survey_required_at": null,
+      "surveyed_at": null,
+      "legal_review_at": null,
+      "approved_at": null,
+      "certificate_issued_at": null,
+      "closed_at": null,
+      "updated_at": "2026-02-01T10:00:00Z"
+    },
+    "submission_date": "2026-02-01T09:00:00Z",
+    "assignment": { "assigned_surveyor_id": null, "assigned_registrar_id": "S14", "assignment_policy": "zone+workload+availability" },
+    "objection": { "has_objection": false, "objection_ids": [] },
+    "internal":  { "notes": ["Pre-check completed."], "visibility": "staff_only" },
+    "comments":  []
+  },
+  {
+    "application_id": "LRMIS-2026-0002",
+    "application_type": "first_registration",
+    "status": "survey_required",
+    "priority": "high",
+    "applicant_ref": { "applicant_id": "APP-DEMO0002", "applicant_type": "lawyer", "submitted_by_representative": false },
+    "parcel": {
+      "parcel_no": "210", "block_no": "05", "basin_no": "1", "zone_id": "ZONE-RM-02",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[35.2105, 31.8950], [35.2119, 31.8950], [35.2119, 31.8959], [35.2105, 31.8959], [35.2105, 31.8950]]]
+      }
+    },
+    "description": "First registration for parcel 210.",
+    "tags": ["first_registration"],
+    "workflow": {
+      "current_state": "survey_required",
+      "allowed_next": ["surveyed", "on_hold", "rejected"],
+      "transition_rules_version": "v1.0"
+    },
+    "required_documents": [
+      { "document_type": "ownership_deed", "required": true, "status": "verified" },
+      { "document_type": "id_copy",        "required": true, "status": "verified" }
+    ],
+    "timestamps": {
+      "submitted_at": "2026-02-03T09:00:00Z",
+      "pre_checked_at": "2026-02-03T11:00:00Z",
+      "survey_required_at": "2026-02-04T08:00:00Z",
+      "updated_at": "2026-02-04T08:00:00Z"
+    },
+    "submission_date": "2026-02-03T09:00:00Z",
+    "assignment": { "assigned_surveyor_id": null, "assigned_registrar_id": "REG-RM-09", "assignment_policy": "zone+workload+availability" },
+    "objection": { "has_objection": false, "objection_ids": [] },
+    "internal":  { "notes": [], "visibility": "staff_only" },
+    "comments":  []
+  }
+]

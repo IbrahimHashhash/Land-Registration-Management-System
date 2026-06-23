@@ -1,0 +1,53 @@
+[
+  {
+    "applicant_id": "APP-DEMO0001",
+    "full_name": "Nour Ahmad",
+    "applicant_type": "citizen",
+    "verification_state": "verified",
+    "identity": { "national_id": "990000001", "verified": true, "verification_method": "otp_stub" },
+    "contacts": { "email": "nour@example.com", "phone": "+970599000001" },
+    "address":  { "city": "Ramallah", "neighborhood": "Al Tireh", "zone_id": "ZONE-RM-01" },
+    "preferences": {
+      "preferred_contact": "email",
+      "language": "ar",
+      "notifications": { "on_status_change": true, "on_missing_documents": true, "on_certificate_ready": true }
+    },
+    "stats": { "total_applications": 1, "approved_applications": 0, "pending_applications": 1 },
+    "linked_applications": [],
+    "created_at": "2026-02-01T09:00:00Z"
+  },
+  {
+    "applicant_id": "APP-DEMO0002",
+    "full_name": "Khaled Mansour",
+    "applicant_type": "lawyer",
+    "verification_state": "verified",
+    "identity": { "national_id": "990000002", "verified": true, "verification_method": "otp_stub" },
+    "contacts": { "email": "khaled@example.com", "phone": "+970599000002" },
+    "address":  { "city": "Ramallah", "neighborhood": "Al Masyoun", "zone_id": "ZONE-RM-02" },
+    "preferences": {
+      "preferred_contact": "email",
+      "language": "ar",
+      "notifications": { "on_status_change": true, "on_missing_documents": true, "on_certificate_ready": true }
+    },
+    "stats": { "total_applications": 0, "approved_applications": 0, "pending_applications": 0 },
+    "linked_applications": [],
+    "created_at": "2026-02-01T09:00:00Z"
+  },
+  {
+    "applicant_id": "APP-DEMO0003",
+    "full_name": "Lina Haddad",
+    "applicant_type": "citizen",
+    "verification_state": "unverified",
+    "identity": { "national_id": "990000003", "verified": false, "verification_method": "otp_stub" },
+    "contacts": { "email": "lina@example.com", "phone": "+970599000003" },
+    "address":  { "city": "Ramallah", "neighborhood": "Ein Munjid", "zone_id": "ZONE-RM-01" },
+    "preferences": {
+      "preferred_contact": "phone",
+      "language": "en",
+      "notifications": { "on_status_change": true, "on_missing_documents": true, "on_certificate_ready": true }
+    },
+    "stats": { "total_applications": 0, "approved_applications": 0, "pending_applications": 0 },
+    "linked_applications": [],
+    "created_at": "2026-02-01T09:00:00Z"
+  }
+]

@@ -1,0 +1,16 @@
+[
+  {
+    "task_id": "SURV-2026-0001",
+    "application_id": "LRMIS-2026-0002",
+    "parcel_id": "RM-Z02-B05-P210",
+    "assigned_surveyor_id": "SURV-RM-04",
+    "status": "visit_scheduled",
+    "milestones": [
+      { "type": "assigned",        "at": "2026-02-04T08:00:00Z", "by": "system",      "meta": { "reason": "zone and workload match" } },
+      { "type": "visit_scheduled", "at": "2026-02-04T09:00:00Z", "by": "SURV-RM-04",  "meta": { "scheduled_date": "2026-02-06" } }
+    ],
+    "field_notes": [],
+    "report_uploaded": false,
+    "created_at": "2026-02-04T08:00:00Z"
+  }
+]

@@ -17,4 +17,7 @@ export const rejectApplication = (id, data) => api.post(`/applications/${id}/rej
 
 export const issueCertificate = (id, data) => api.post(`/applications/${id}/certificate`, data)
 
+export const verifyDocument = (applicationId, documentId, data) =>
+  api.patch(`/applications/${applicationId}/documents/${documentId}/verify`, data, { headers: { 'X-Staff-Role': 'registrar' } })
+
 export const listCertificates = () => api.get('/certificates/')

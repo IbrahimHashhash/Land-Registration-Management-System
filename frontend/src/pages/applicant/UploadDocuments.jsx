@@ -1,25 +1,61 @@
-import React, { useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import ApplicantShell from '../../components/ApplicantShell'
 import { useApplicant } from '../../context/ApplicantContext'
-import { getAppsForUser, UPLOAD_DOCS } from '../../data/applicantApps'
-import { uploadDocument } from '../../api/applicant'
+import {
+  getApplicantApplications,
+  getApplicationDocuments,
+  uploadDocument,
+} from '../../api/applicant'
 import FormSelect from '../../components/ui/FormSelect'
 import { DOC_TYPES } from '../../constants/applicationForms'
+import { TYPES } from '../../theme'
+
+const DOC_STATUS_BADGE = {
+  verified:       { label: 'Verified',       fg: '#1f7a4d', bg: '#e2f3e9' },
+  pending_review: { label: 'Pending Review', fg: '#b45309', bg: '#fbeedd' },
+  missing:        { label: 'Missing',        fg: '#b91c1c', bg: '#fbe6e6' },
+  rejected:       { label: 'Rejected',       fg: '#b91c1c', bg: '#fbe6e6' },
+}
 
 export default function UploadDocuments() {
   const { user } = useApplicant()
   const fileRef  = useRef(null)
 
-  const apps = getAppsForUser(user?.id)
-  const docs = UPLOAD_DOCS[user?.id] || []
+  const [apps, setApps] = useState([])
+  const [appsLoading, setAppsLoading] = useState(true)
+  const [docs, setDocs] = useState([])
+  const [docsLoading, setDocsLoading] = useState(false)
 
   const [selectedAppIdx, setSelectedAppIdx] = useState(0)
   const [docType,        setDocType]        = useState('sale_contract')
   const [fileName,       setFileName]       = useState('')
-  const [status,         setStatus]         = useState('idle') // idle | loading | success | error
+  const [status,         setStatus]         = useState('idle')
   const [errMsg,         setErrMsg]         = useState('')
 
   const selectedApp = apps[selectedAppIdx]
+
+  useEffect(() => {
+    if (!user?.applicant_id) { setAppsLoading(false); return }
+    setAppsLoading(true)
+    getApplicantApplications(user.applicant_id)
+      .then(list => setApps(list || []))
+      .catch(() => setApps([]))
+      .finally(() => setAppsLoading(false))
+  }, [user?.applicant_id])
+
+  function refreshDocs() {
+    if (!selectedApp?.application_id) { setDocs([]); return }
+    setDocsLoading(true)
+    getApplicationDocuments(selectedApp.application_id)
+      .then(list => setDocs(list || []))
+      .catch(() => setDocs([]))
+      .finally(() => setDocsLoading(false))
+  }
+
+  useEffect(() => {
+    refreshDocs()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedApp?.application_id])
 
   function handleFileChange(e) {
     const file = e.target.files?.[0]
@@ -31,7 +67,7 @@ export default function UploadDocuments() {
     setStatus('loading')
     setErrMsg('')
     try {
-      await uploadDocument(selectedApp.id, {
+      await uploadDocument(selectedApp.application_id, {
         document_type: docType,
         file_name: fileName || 'document.pdf',
         file_path: `/uploads/${fileName || 'document.pdf'}`,
@@ -39,6 +75,7 @@ export default function UploadDocuments() {
       setStatus('success')
       setFileName('')
       if (fileRef.current) fileRef.current.value = ''
+      refreshDocs()
     } catch (err) {
       const detail = err.response?.data?.detail
       setErrMsg(typeof detail === 'string' ? detail : 'Upload failed. Please try again.')
@@ -52,111 +89,126 @@ export default function UploadDocuments() {
       subtitle="Add supporting documents to your application"
     >
       <div className="max-w-[680px]">
-        {/* Upload form */}
         <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[28px] mb-[16px]">
           <div className="text-[17px] font-bold mb-[5px]">Upload Additional Documents</div>
           <div className="text-[13px] text-[#5e6b65] mb-[22px]">Add supporting documents to an existing application.</div>
 
-          <div className="mb-[18px]">
-            <label className="text-[12px] font-semibold text-[#384640] block mb-[6px]">Application *</label>
-            <FormSelect
-              value={selectedAppIdx}
-              onChange={e => { setSelectedAppIdx(Number(e.target.value)); setStatus('idle') }}
-            >
-              {apps.map((a, i) => (
-                <option key={a.id} value={i}>{a.id} · {a.typeLabel}</option>
-              ))}
-            </FormSelect>
-          </div>
-
-          <div className="mb-[18px]">
-            <label className="text-[12px] font-semibold text-[#384640] block mb-[6px]">Document Type *</label>
-            <FormSelect value={docType} onChange={e => setDocType(e.target.value)}>
-              {DOC_TYPES.map(t => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </FormSelect>
-          </div>
-
-          {/* File input / drop zone */}
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".pdf,.jpg,.jpeg,.png"
-            onChange={handleFileChange}
-            className="hidden"
-            id="file-input"
-          />
-          <label
-            htmlFor="file-input"
-            className="border-2 border-dashed border-[#c2ccc7] rounded-[11px] p-[32px] text-center cursor-pointer mb-[18px] flex flex-col items-center hover:bg-[#f7f9f8] hover:border-[#1f5f4f] transition-colors block"
-          >
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#9aa8a2" strokeWidth="1.5" className="mb-[10px]">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="17 8 12 3 7 8"/>
-              <line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-            {fileName ? (
-              <div className="text-[14px] font-semibold text-[#1f5f4f]">{fileName}</div>
-            ) : (
-              <>
-                <div className="text-[14px] font-semibold text-[#384640]">Drop your file here or click to browse</div>
-                <div className="text-[12px] text-[#9aa8a2] mt-[5px]">PDF, JPG, PNG · Max 10 MB</div>
-              </>
-            )}
-          </label>
-
-          {status === 'success' ? (
-            <div className="w-full py-[12px] rounded-[9px] bg-[#e2f3e9] text-[#1f7a4d] text-[14px] font-semibold text-center">
-              ✓ Document Uploaded Successfully
-            </div>
+          {appsLoading ? (
+            <div className="text-[13px] text-[#9aa8a2] py-2">Loading applications…</div>
+          ) : apps.length === 0 ? (
+            <div className="text-[13px] text-[#9aa8a2] py-2">No applications to upload to.</div>
           ) : (
             <>
-              {status === 'error' && (
-                <div className="mb-[12px] px-[14px] py-[10px] rounded-[9px] bg-[#fbe6e6] text-[#b91c1c] text-[12.5px]">
-                  {errMsg}
-                </div>
-              )}
-              <button
-                onClick={handleUpload}
-                disabled={status === 'loading'}
-                className="w-full py-[12px] border-none rounded-[9px] bg-[#1f5f4f] text-white text-[14px] font-semibold cursor-pointer hover:bg-[#184c40] transition-colors disabled:opacity-60 disabled:cursor-wait flex items-center justify-center gap-2"
-                style={{ fontFamily: 'inherit' }}
+              <div className="mb-[18px]">
+                <label className="text-[12px] font-semibold text-[#384640] block mb-[6px]">Application *</label>
+                <FormSelect
+                  value={selectedAppIdx}
+                  onChange={e => { setSelectedAppIdx(Number(e.target.value)); setStatus('idle') }}
+                >
+                  {apps.map((a, i) => (
+                    <option key={a.application_id} value={i}>
+                      {a.application_id} · {TYPES[a.application_type] || a.application_type}
+                    </option>
+                  ))}
+                </FormSelect>
+              </div>
+
+              <div className="mb-[18px]">
+                <label className="text-[12px] font-semibold text-[#384640] block mb-[6px]">Document Type *</label>
+                <FormSelect value={docType} onChange={e => setDocType(e.target.value)}>
+                  {DOC_TYPES.map(t => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </FormSelect>
+              </div>
+
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                onChange={handleFileChange}
+                className="hidden"
+                id="file-input"
+              />
+              <label
+                htmlFor="file-input"
+                className="border-2 border-dashed border-[#c2ccc7] rounded-[11px] p-[32px] text-center cursor-pointer mb-[18px] flex flex-col items-center hover:bg-[#f7f9f8] hover:border-[#1f5f4f] transition-colors block"
               >
-                {status === 'loading' ? (
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#9aa8a2" strokeWidth="1.5" className="mb-[10px]">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                {fileName ? (
+                  <div className="text-[14px] font-semibold text-[#1f5f4f]">{fileName}</div>
+                ) : (
                   <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Uploading…
+                    <div className="text-[14px] font-semibold text-[#384640]">Drop your file here or click to browse</div>
+                    <div className="text-[12px] text-[#9aa8a2] mt-[5px]">PDF, JPG, PNG · Max 10 MB</div>
                   </>
-                ) : 'Upload Document'}
-              </button>
+                )}
+              </label>
+
+              {status === 'success' ? (
+                <div className="w-full py-[12px] rounded-[9px] bg-[#e2f3e9] text-[#1f7a4d] text-[14px] font-semibold text-center">
+                  ✓ Document Uploaded Successfully
+                </div>
+              ) : (
+                <>
+                  {status === 'error' && (
+                    <div className="mb-[12px] px-[14px] py-[10px] rounded-[9px] bg-[#fbe6e6] text-[#b91c1c] text-[12.5px]">
+                      {errMsg}
+                    </div>
+                  )}
+                  <button
+                    onClick={handleUpload}
+                    disabled={status === 'loading'}
+                    className="w-full py-[12px] border-none rounded-[9px] bg-[#1f5f4f] text-white text-[14px] font-semibold cursor-pointer hover:bg-[#184c40] transition-colors disabled:opacity-60 disabled:cursor-wait flex items-center justify-center gap-2"
+                    style={{ fontFamily: 'inherit' }}
+                  >
+                    {status === 'loading' ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Uploading…
+                      </>
+                    ) : 'Upload Document'}
+                  </button>
+                </>
+              )}
             </>
           )}
         </div>
 
-        {/* Document review status */}
         <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
           <div className="text-[14.5px] font-bold mb-[14px]">Document Review Status</div>
-          {docs.map((d, i) => (
-            <div key={i} className="flex items-center gap-[13px] py-[12px] border-b border-[#f2f4f3] last:border-b-0">
-              <div className="w-[38px] h-[38px] rounded-[8px] bg-[#f0f3f1] flex items-center justify-center shrink-0">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5e6b65" strokeWidth="2">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                  <polyline points="14 2 14 8 20 8"/>
-                </svg>
+          {docsLoading ? (
+            <div className="text-[12.5px] text-[#9aa8a2] py-2">Loading…</div>
+          ) : docs.length === 0 ? (
+            <div className="text-[12.5px] text-[#9aa8a2] py-2">No documents uploaded yet for this application.</div>
+          ) : docs.map((d, i) => {
+            const badge = DOC_STATUS_BADGE[d.verification_status] ||
+              { label: d.verification_status, fg: '#475569', bg: '#eef1f4' }
+            return (
+              <div key={d.document_id || i} className="flex items-center gap-[13px] py-[12px] border-b border-[#f2f4f3] last:border-b-0">
+                <div className="w-[38px] h-[38px] rounded-[8px] bg-[#f0f3f1] flex items-center justify-center shrink-0">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5e6b65" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-semibold">{d.document_type?.replace(/_/g, ' ')}</div>
+                  <div className="text-[11.5px] text-[#5e6b65] mono">{d.file_name}</div>
+                </div>
+                <span
+                  className="text-[11px] font-semibold px-[10px] py-1 rounded-full shrink-0"
+                  style={{ color: badge.fg, background: badge.bg }}
+                >
+                  {badge.label}
+                </span>
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-semibold">{d.type}</div>
-                <div className="text-[11.5px] text-[#5e6b65] mono">{d.file} · {d.size}</div>
-              </div>
-              <span
-                className="text-[11px] font-semibold px-[10px] py-1 rounded-full shrink-0"
-                style={{ color: d.fg, background: d.bg }}
-              >
-                {d.sLabel}
-              </span>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </ApplicantShell>

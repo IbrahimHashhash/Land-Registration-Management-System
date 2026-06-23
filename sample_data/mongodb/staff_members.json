@@ -1,0 +1,72 @@
+[
+  {
+    "staff_code": "SURV-RM-04",
+    "name": "Survey Team A",
+    "role": "surveyor",
+    "department": "Cadastral Survey",
+    "skills": ["boundary_survey", "parcel_subdivision", "gps_mapping"],
+    "coverage": {
+      "zone_ids": ["ZONE-RM-01", "ZONE-RM-02"],
+      "geo_fence": {
+        "type": "Polygon",
+        "coordinates": [[[35.19, 31.89], [35.22, 31.89], [35.22, 31.92], [35.19, 31.92], [35.19, 31.89]]]
+      }
+    },
+    "schedule": {
+      "timezone": "Asia/Jerusalem",
+      "shifts": [
+        { "day": "Mon", "start": "08:00", "end": "16:00" },
+        { "day": "Tue", "start": "08:00", "end": "16:00" },
+        { "day": "Wed", "start": "08:00", "end": "16:00" }
+      ],
+      "on_call": false
+    },
+    "workload": { "active_tasks": 4, "max_tasks": 10 },
+    "contacts": { "phone": "+970599111111", "email": "survey_a@example.com" },
+    "active": true,
+    "created_at": "2026-01-10T09:00:00Z"
+  },
+  {
+    "staff_code": "SURV-RM-05",
+    "name": "Survey Team B",
+    "role": "surveyor",
+    "department": "Cadastral Survey",
+    "skills": ["boundary_survey", "gps_mapping"],
+    "coverage": { "zone_ids": ["ZONE-RM-03"] },
+    "schedule": {
+      "timezone": "Asia/Jerusalem",
+      "shifts": [
+        { "day": "Mon", "start": "08:00", "end": "16:00" },
+        { "day": "Thu", "start": "08:00", "end": "16:00" }
+      ],
+      "on_call": true
+    },
+    "workload": { "active_tasks": 1, "max_tasks": 8 },
+    "contacts": { "phone": "+970599111112", "email": "survey_b@example.com" },
+    "active": true,
+    "created_at": "2026-01-10T09:00:00Z"
+  },
+  {
+    "staff_code": "REG-RM-09",
+    "name": "Registrar Office B",
+    "role": "registrar",
+    "department": "Legal Review",
+    "skills": ["legal_review", "ownership_verification"],
+    "coverage": { "zone_ids": ["ZONE-RM-01", "ZONE-RM-02", "ZONE-RM-03"] },
+    "schedule": {
+      "timezone": "Asia/Jerusalem",
+      "shifts": [
+        { "day": "Sun", "start": "08:00", "end": "16:00" },
+        { "day": "Mon", "start": "08:00", "end": "16:00" },
+        { "day": "Tue", "start": "08:00", "end": "16:00" },
+        { "day": "Wed", "start": "08:00", "end": "16:00" },
+        { "day": "Thu", "start": "08:00", "end": "16:00" }
+      ],
+      "on_call": false
+    },
+    "workload": { "active_tasks": 3, "max_tasks": 15 },
+    "contacts": { "phone": "+970599222222", "email": "registrar_b@example.com" },
+    "active": true,
+    "created_at": "2026-01-10T09:00:00Z"
+  }
+]

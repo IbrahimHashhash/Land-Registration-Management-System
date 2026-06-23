@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Link, Outlet } from 'react-router-dom'
 import Login from './pages/Login'
 import RegisterApplicant from './pages/RegisterApplicant'
 import StaffDashboard from './pages/StaffDashboard'
+import StaffLogin from './pages/StaffLogin'
 import ApplicationManagement from './pages/ApplicationManagement'
 import ApplicationDetails from './pages/ApplicationDetails'
 import RegistrarReview from './pages/RegistrarReview'
@@ -17,6 +18,7 @@ import SubmitObjection from './pages/applicant/SubmitObjection'
 import ApplicantProfile from './pages/applicant/ApplicantProfile'
 import SurveyorTaskList from './pages/surveyor/SurveyorTaskList'
 import SurveyorTaskExecution from './pages/surveyor/SurveyorTaskExecution'
+import SurveyorLogin from './pages/surveyor/SurveyorLogin'
 import LiveMap from './pages/surveyor/LiveMap'
 import AnalyticsDashboard from './pages/surveyor/AnalyticsDashboard'
 
@@ -36,6 +38,7 @@ export default function App() {
         <Route path="/"                    element={<Login />} />
 
         {/* Staff console */}
+        <Route path="/staff/login"         element={<StaffLogin />} />
         <Route path="/dashboard"           element={<StaffDashboard />} />
         <Route path="/applications"        element={<ApplicationManagement />} />
         <Route path="/applications/:id"    element={<ApplicationDetails />} />
@@ -61,6 +64,7 @@ export default function App() {
         </Route>
 
         {/* Surveyor panel */}
+        <Route path="/surveyor/login" element={<SurveyorLogin />} />
         <Route path="/surveyor" element={<SurveyorTaskList />} />
         <Route path="/surveyor/task/:applicationId" element={<SurveyorTaskExecution />} />
         <Route path="/surveyor/map" element={<LiveMap />} />

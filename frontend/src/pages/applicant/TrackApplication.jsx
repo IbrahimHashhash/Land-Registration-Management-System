@@ -2,8 +2,13 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import ApplicantShell from '../../components/ApplicantShell'
 import { useApplicant } from '../../context/ApplicantContext'
-import { getAppsForUser, getTrackData } from '../../data/applicantApps'
-import { getTimeline, addComment } from '../../api/applicant'
+import {
+  getApplicantApplications,
+  getTimeline,
+  getApplicationDocuments,
+  addComment,
+} from '../../api/applicant'
+import { STATUS, TYPES } from '../../theme'
 
 const TYPE_LABELS = {
   submitted:         'Submitted',
@@ -27,17 +32,35 @@ const TYPE_DOTS = {
   survey_required:   '#b45309',
 }
 
-function mapApiTimeline(events) {
-  return events.map(t => ({
+const DOC_STATUS_BADGE = {
+  verified:       { label: 'Verified',       fg: '#1f7a4d', bg: '#e2f3e9' },
+  pending_review: { label: 'Pending Review', fg: '#b45309', bg: '#fbeedd' },
+  missing:        { label: 'Missing',        fg: '#b91c1c', bg: '#fbe6e6' },
+  rejected:       { label: 'Rejected',       fg: '#b91c1c', bg: '#fbe6e6' },
+}
+
+function formatDateTime(iso) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '—'
+    : d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function formatDate(iso) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '—'
+    : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function mapTimeline(events) {
+  return (events || []).map(t => ({
     event: TYPE_LABELS[t.type] || t.type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-    actor: t.by.actor_type === 'applicant' ? 'You · via web portal'
-         : t.by.actor_type === 'staff'     ? `Staff · ${t.by.actor_id || 'Registrar Office'}`
-         : t.by.actor_type === 'surveyor'  ? 'Surveyor · Field team'
+    actor: t.by?.actor_type === 'applicant' ? 'You · via web portal'
+         : t.by?.actor_type === 'staff'     ? `Staff · ${t.by?.actor_id || 'Registrar Office'}`
+         : t.by?.actor_type === 'surveyor'  ? 'Surveyor · Field team'
          : 'System',
-    time: new Date(t.at).toLocaleString('en-US', {
-      month: 'short', day: 'numeric', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-    }),
+    time: formatDateTime(t.at),
     dot: TYPE_DOTS[t.type] || '#9aa8a2',
     detail: t.meta?.text || t.meta?.reason || null,
   }))
@@ -48,35 +71,59 @@ export default function TrackApplication() {
   const navigate = useNavigate()
   const { id } = useParams()
 
-  const apps      = getAppsForUser(user?.id)
-  const targetId  = id || apps[0]?.id
-  const app       = apps.find(a => a.id === targetId) || apps[0]
-  const staticData = app ? getTrackData(app.id) : null
-
-  const [timeline, setTimeline]         = useState(staticData?.timeline || [])
+  const [apps, setApps] = useState([])
+  const [appsLoading, setAppsLoading] = useState(true)
+  const [timeline, setTimeline] = useState([])
+  const [docs, setDocs] = useState([])
   const [timelineLoading, setTimelineLoading] = useState(false)
-  const [commentText,   setCommentText]   = useState('')
-  const [commentStatus, setCommentStatus] = useState('idle') // idle | loading | success | error
+  const [docsLoading, setDocsLoading] = useState(false)
+  const [commentText, setCommentText] = useState('')
+  const [commentStatus, setCommentStatus] = useState('idle')
+
+  // Load applicant's applications
+  useEffect(() => {
+    if (!user?.applicant_id) { setAppsLoading(false); return }
+    setAppsLoading(true)
+    getApplicantApplications(user.applicant_id)
+      .then(list => setApps(list || []))
+      .catch(() => setApps([]))
+      .finally(() => setAppsLoading(false))
+  }, [user?.applicant_id])
+
+  const targetId = id || apps[0]?.application_id
+  const app = apps.find(a => a.application_id === targetId) || apps[0]
 
   function refreshTimeline() {
-    if (!app?.id) return
+    if (!app?.application_id) return
     setTimelineLoading(true)
-    getTimeline(app.id)
-      .then(events => {
-        if (Array.isArray(events) && events.length > 0) {
-          setTimeline(mapApiTimeline(events))
-        }
-      })
-      .catch(() => { /* keep static timeline */ })
+    getTimeline(app.application_id)
+      .then(events => setTimeline(mapTimeline(events)))
+      .catch(() => setTimeline([]))
       .finally(() => setTimelineLoading(false))
   }
+
+  function refreshDocs() {
+    if (!app?.application_id) return
+    setDocsLoading(true)
+    getApplicationDocuments(app.application_id)
+      .then(list => setDocs(list || []))
+      .catch(() => setDocs([]))
+      .finally(() => setDocsLoading(false))
+  }
+
+  useEffect(() => {
+    if (!app?.application_id) { setTimeline([]); setDocs([]); return }
+    refreshTimeline()
+    refreshDocs()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [app?.application_id])
 
   async function handleComment() {
     if (!commentText.trim()) return
     setCommentStatus('loading')
     try {
-      await addComment(app.id, {
-        author_id: user?.applicant_id || user?.id,
+      await addComment(app.application_id, {
+        author_id: user?.applicant_id,
         text: commentText.trim(),
       })
       setCommentStatus('success')
@@ -87,12 +134,18 @@ export default function TrackApplication() {
     }
   }
 
-  useEffect(() => {
-    setTimeline(staticData?.timeline || [])
-    refreshTimeline()
-  }, [app?.id])
+  if (appsLoading) {
+    return (
+      <ApplicantShell title="Track Application" subtitle="Loading…">
+        <div className="py-10 flex items-center justify-center gap-2 text-[13px] text-[#9aa8a2]">
+          <div className="w-4 h-4 border-2 border-[#1f5f4f] border-t-transparent rounded-full animate-spin" />
+          Loading…
+        </div>
+      </ApplicantShell>
+    )
+  }
 
-  if (!app || !staticData) {
+  if (!app) {
     return (
       <ApplicantShell title="Track Application" subtitle="No applications found">
         <div className="text-[13px] text-[#9aa8a2] pt-8 text-center">
@@ -109,8 +162,11 @@ export default function TrackApplication() {
     )
   }
 
+  const st = STATUS[app.status] || { label: app.status, fg: '#475569', bg: '#eef1f4' }
+  const typeLabel = TYPES[app.application_type] || app.application_type
+
   return (
-    <ApplicantShell title="Track Application" subtitle={`${app.id} · ${app.typeLabel}`}>
+    <ApplicantShell title="Track Application" subtitle={`${app.application_id} · ${typeLabel}`}>
       <button
         onClick={() => navigate('/applicant')}
         className="inline-flex items-center gap-[6px] text-[13px] text-[#5e6b65] font-medium mb-[16px] cursor-pointer bg-transparent border-none p-0 hover:text-[#1f5f4f] transition-colors"
@@ -119,50 +175,45 @@ export default function TrackApplication() {
         ‹ Back to dashboard
       </button>
 
-      {/* App header */}
       <div className="flex items-start gap-[12px] mb-[20px] flex-wrap">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-[12px] flex-wrap">
-            <span className="mono text-[19px] font-semibold">{app.id}</span>
+            <span className="mono text-[19px] font-semibold">{app.application_id}</span>
             <span
               className="text-[11.5px] font-semibold px-[12px] py-[5px] rounded-full"
-              style={{ color: app.statusFg, background: app.statusBg }}
+              style={{ color: st.fg, background: st.bg }}
             >
-              {app.statusLabel}
+              {st.label}
             </span>
           </div>
           <div className="text-[13.5px] text-[#5e6b65] mt-[6px]">
-            {app.typeLabel} · Parcel {app.parcel} · {app.zone}
+            {typeLabel} · Submitted {formatDate(app.submission_date)}
           </div>
         </div>
       </div>
 
-      {/* App selector (if multiple apps) */}
       {apps.length > 1 && (
         <div className="flex gap-[8px] mb-[20px] flex-wrap">
           {apps.map(a => (
             <button
-              key={a.id}
-              onClick={() => navigate(`/applicant/track/${a.id}`)}
+              key={a.application_id}
+              onClick={() => navigate(`/applicant/track/${a.application_id}`)}
               className="px-[12px] py-[7px] rounded-[9px] border text-[12.5px] font-semibold transition-colors cursor-pointer"
               style={{
                 fontFamily: 'inherit',
-                borderColor: a.id === app.id ? '#1f5f4f' : '#e3e8e5',
-                background:  a.id === app.id ? '#e7f1ee'  : '#fff',
-                color:       a.id === app.id ? '#1f5f4f'  : '#384640',
+                borderColor: a.application_id === app.application_id ? '#1f5f4f' : '#e3e8e5',
+                background:  a.application_id === app.application_id ? '#e7f1ee'  : '#fff',
+                color:       a.application_id === app.application_id ? '#1f5f4f'  : '#384640',
               }}
             >
-              {a.id}
+              {a.application_id}
             </button>
           ))}
         </div>
       )}
 
       <div className="grid gap-[16px]" style={{ gridTemplateColumns: '1.5fr 1fr' }}>
-        {/* Left column */}
         <div className="flex flex-col gap-[16px]">
-
-          {/* Status timeline */}
           <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
             <div className="flex items-center justify-between mb-[18px]">
               <div className="text-[14.5px] font-bold">Status Timeline</div>
@@ -170,34 +221,30 @@ export default function TrackApplication() {
                 <div className="w-4 h-4 border-2 border-[#1f5f4f] border-t-transparent rounded-full animate-spin" />
               )}
             </div>
-            <div className="relative pl-[6px]">
-              {timeline.map((t, i) => (
-                <div key={i} className="relative pl-[24px] pb-[18px] border-l-2 border-[#eef1ef] ml-[5px]">
-                  <div
-                    className="absolute left-[-7px] top-[1px] w-[12px] h-[12px] rounded-full border-2 border-white"
-                    style={{ background: t.dot, boxShadow: `0 0 0 2px ${t.dot}` }}
-                  />
-                  <div className="text-[13px] font-semibold mt-[-3px]">{t.event}</div>
-                  <div className="text-[11.5px] text-[#5e6b65] mt-[2px]">{t.actor}</div>
-                  <div className="text-[11px] text-[#9aa8a2] mono mt-[2px]">{t.time}</div>
-                  {t.detail && (
-                    <div className="text-[12px] text-[#384640] mt-[7px] bg-[#f7f9f8] border border-[#eef1ef] rounded-[8px] px-[11px] py-[8px] leading-relaxed">
-                      {t.detail}
-                    </div>
-                  )}
-                </div>
-              ))}
-              {staticData.nextStep && (
-                <div className="relative pl-[24px] ml-[5px]">
-                  <div className="absolute left-[-7px] top-[1px] w-[12px] h-[12px] rounded-full bg-white border-2 border-dashed border-[#c2ccc7]" />
-                  <div className="text-[13px] font-semibold text-[#9aa8a2] mt-[-3px]">{staticData.nextStep}</div>
-                  <div className="text-[11.5px] text-[#9aa8a2] mt-[2px]">Next step · pending</div>
-                </div>
-              )}
-            </div>
+            {timeline.length === 0 && !timelineLoading ? (
+              <div className="text-[12.5px] text-[#9aa8a2]">No timeline events yet.</div>
+            ) : (
+              <div className="relative pl-[6px]">
+                {timeline.map((t, i) => (
+                  <div key={i} className="relative pl-[24px] pb-[18px] border-l-2 border-[#eef1ef] ml-[5px]">
+                    <div
+                      className="absolute left-[-7px] top-[1px] w-[12px] h-[12px] rounded-full border-2 border-white"
+                      style={{ background: t.dot, boxShadow: `0 0 0 2px ${t.dot}` }}
+                    />
+                    <div className="text-[13px] font-semibold mt-[-3px]">{t.event}</div>
+                    <div className="text-[11.5px] text-[#5e6b65] mt-[2px]">{t.actor}</div>
+                    <div className="text-[11px] text-[#9aa8a2] mono mt-[2px]">{t.time}</div>
+                    {t.detail && (
+                      <div className="text-[12px] text-[#384640] mt-[7px] bg-[#f7f9f8] border border-[#eef1ef] rounded-[8px] px-[11px] py-[8px] leading-relaxed">
+                        {t.detail}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Documents */}
           <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
             <div className="flex items-baseline justify-between mb-[14px]">
               <div className="text-[14.5px] font-bold">Documents</div>
@@ -209,48 +256,36 @@ export default function TrackApplication() {
                 Upload more
               </button>
             </div>
-            {staticData.docs.map((d, i) => (
-              <div key={i} className="flex items-center gap-[13px] py-[11px] border-b border-[#f2f4f3] last:border-b-0">
-                <div className="w-[36px] h-[36px] rounded-[8px] bg-[#f0f3f1] flex items-center justify-center shrink-0">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5e6b65" strokeWidth="2">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                    <polyline points="14 2 14 8 20 8"/>
-                  </svg>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-semibold">{d.type}</div>
-                  <div className="text-[11.5px] text-[#5e6b65]">{d.file}</div>
-                </div>
-                <span
-                  className="text-[11px] font-semibold px-[10px] py-1 rounded-full shrink-0"
-                  style={{ color: d.fg, background: d.bg }}
-                >
-                  {d.sLabel}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {/* Registrar notes */}
-          <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
-            <div className="text-[14.5px] font-bold mb-[14px]">Registrar Notes</div>
-            {staticData.notes.map((n, i) => (
-              <div key={i} className="flex gap-[11px] p-[12px] bg-[#f7f9f8] rounded-[9px]">
-                <div className="w-[30px] h-[30px] rounded-[7px] bg-[#eef1f4] text-[#475569] flex items-center justify-center font-bold text-[11px] shrink-0">
-                  {n.actor}
-                </div>
-                <div className="flex-1">
-                  <div className="text-[12.5px]">
-                    <span className="font-semibold">Staff #{n.actor.replace('S', '')}</span>
-                    <span className="text-[#9aa8a2]"> · {n.date}</span>
+            {docsLoading ? (
+              <div className="text-[12.5px] text-[#9aa8a2] py-2">Loading documents…</div>
+            ) : docs.length === 0 ? (
+              <div className="text-[12.5px] text-[#9aa8a2] py-2">No documents uploaded yet.</div>
+            ) : docs.map((d, i) => {
+              const badge = DOC_STATUS_BADGE[d.verification_status] ||
+                { label: d.verification_status, fg: '#475569', bg: '#eef1f4' }
+              return (
+                <div key={d.document_id || i} className="flex items-center gap-[13px] py-[11px] border-b border-[#f2f4f3] last:border-b-0">
+                  <div className="w-[36px] h-[36px] rounded-[8px] bg-[#f0f3f1] flex items-center justify-center shrink-0">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5e6b65" strokeWidth="2">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                    </svg>
                   </div>
-                  <div className="text-[13px] text-[#384640] mt-1 leading-relaxed">{n.text}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-semibold">{d.document_type?.replace(/_/g, ' ')}</div>
+                    <div className="text-[11.5px] text-[#5e6b65] mono">{d.file_name}</div>
+                  </div>
+                  <span
+                    className="text-[11px] font-semibold px-[10px] py-1 rounded-full shrink-0"
+                    style={{ color: badge.fg, background: badge.bg }}
+                  >
+                    {badge.label}
+                  </span>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
-          {/* Add comment */}
           <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
             <div className="text-[14.5px] font-bold mb-[14px]">Add Comment</div>
             {commentStatus === 'success' ? (
@@ -285,43 +320,20 @@ export default function TrackApplication() {
           </div>
         </div>
 
-        {/* Right column */}
         <div className="flex flex-col gap-[16px] self-start">
           <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
             <div className="text-[14.5px] font-bold mb-[14px]">Application Summary</div>
             <div className="flex flex-col gap-[11px] text-[12.5px]">
               {[
-                ['Type',      app.typeLabel,  false],
-                ['Parcel',    app.parcel,     true],
-                ['Zone',      app.zone,       false],
-                ['Submitted', app.submitted,  false],
-                ['Priority',  'Normal',       false],
+                ['Type',      typeLabel,                       false],
+                ['Status',    st.label,                        false],
+                ['Submitted', formatDate(app.submission_date), false],
               ].map(([k, v, mono]) => (
                 <div key={k} className="flex justify-between gap-[10px]">
                   <span className="text-[#5e6b65]">{k}</span>
                   <span className={`font-semibold ${mono ? 'mono' : ''}`}>{v}</span>
                 </div>
               ))}
-            </div>
-          </div>
-
-          <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
-            <div className="text-[14.5px] font-bold mb-[14px]">Survey Status</div>
-            <div className="flex items-center gap-[11px] p-[14px] bg-[#f7f9f8] rounded-[10px]">
-              <div
-                className="w-[40px] h-[40px] rounded-[9px] flex items-center justify-center shrink-0"
-                style={{ background: staticData.survey.color + '22', color: staticData.survey.color }}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                </svg>
-              </div>
-              <div>
-                <div className="text-[13px] font-semibold" style={{ color: staticData.survey.color }}>
-                  {staticData.survey.label}
-                </div>
-                <div className="text-[11.5px] text-[#5e6b65] mt-0.5 leading-snug">{staticData.survey.desc}</div>
-              </div>
             </div>
           </div>
 

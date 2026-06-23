@@ -1,0 +1,44 @@
+[
+  {
+    "parcel_code": "RM-Z01-B12-P145",
+    "parcel_number": "145", "block_number": "12", "basin_number": "3",
+    "zone_id": "ZONE-RM-01",
+    "area_sqm": 850.5, "land_use": "residential",
+    "registration_status": "registered",
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[[35.2001, 31.9021], [35.2015, 31.9021], [35.2015, 31.9030], [35.2001, 31.9030], [35.2001, 31.9021]]]
+    },
+    "address_hint": "Ramallah - Al Tireh",
+    "dispute_state": "none",
+    "created_at": "2026-01-10T08:00:00Z"
+  },
+  {
+    "parcel_code": "RM-Z02-B05-P210",
+    "parcel_number": "210", "block_number": "05", "basin_number": "1",
+    "zone_id": "ZONE-RM-02",
+    "area_sqm": 1200.0, "land_use": "commercial",
+    "registration_status": "pending",
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[[35.2105, 31.8950], [35.2119, 31.8950], [35.2119, 31.8959], [35.2105, 31.8959], [35.2105, 31.8950]]]
+    },
+    "address_hint": "Ramallah - Center",
+    "dispute_state": "disputed",
+    "created_at": "2026-01-10T08:00:00Z"
+  },
+  {
+    "parcel_code": "RM-Z01-B17-P088",
+    "parcel_number": "88", "block_number": "17", "basin_number": "2",
+    "zone_id": "ZONE-RM-01",
+    "area_sqm": 640.0, "land_use": "residential",
+    "registration_status": "pending",
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[[35.1980, 31.9075], [35.1994, 31.9075], [35.1994, 31.9084], [35.1980, 31.9084], [35.1980, 31.9075]]]
+    },
+    "address_hint": "Ramallah - Al Tireh",
+    "dispute_state": "none",
+    "created_at": "2026-01-10T08:00:00Z"
+  }
+]
