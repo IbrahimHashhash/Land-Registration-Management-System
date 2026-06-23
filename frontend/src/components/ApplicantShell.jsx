@@ -89,13 +89,6 @@ export default function ApplicantShell({ title, subtitle, children }) {
             <div className="text-[19px] font-bold tracking-[-0.01em] text-[#16201c]">{title}</div>
             {subtitle && <div className="text-[12.5px] text-[#5e6b65] mt-px">{subtitle}</div>}
           </div>
-          <button className="relative w-[38px] h-[38px] border border-[#e3e8e5] rounded-[9px] bg-white cursor-pointer flex items-center justify-center hover:bg-[#f4f6f5] transition-colors">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-              <path d="M13.7 21a2 2 0 0 1-3.4 0"/>
-            </svg>
-            <span className="absolute top-[7px] right-[8px] w-[7px] h-[7px] rounded-full bg-[#be123c] border-[1.5px] border-white" />
-          </button>
         </header>
 
         <main className="flex-1 p-[26px_30px_50px]">

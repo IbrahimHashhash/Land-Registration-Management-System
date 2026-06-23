@@ -11,10 +11,6 @@ const NAV = [
     icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r=".5" fill="currentColor"/><circle cx="3.5" cy="12" r=".5" fill="currentColor"/><circle cx="3.5" cy="18" r=".5" fill="currentColor"/></svg>,
   },
   {
-    label: 'New Application', to: '/applications/new',
-    icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>,
-  },
-  {
     label: 'Certificates', to: '/certificates',
     icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="9" r="6"/><path d="M9 14l-1.5 7 4.5-2.7L16.5 21 15 14"/></svg>,
   },
@@ -23,7 +19,7 @@ const NAV = [
 export default function Sidebar() {
   const location = useLocation()
   const path = location.pathname
-  const isAppsActive = path === '/applications' || (path.startsWith('/applications/') && path !== '/applications/new')
+  const isAppsActive = path === '/applications' || path.startsWith('/applications/')
 
   return (
     <aside className="w-[236px] shrink-0 bg-[#1a1f1d] flex flex-col px-3.5 py-[18px] sticky top-0 h-screen overflow-y-auto">

@@ -5,9 +5,16 @@ import 'leaflet/dist/leaflet.css'
 import ApplicantShell from '../../components/ApplicantShell'
 import { useApplicant } from '../../context/ApplicantContext'
 import FormSelect from '../../components/ui/FormSelect'
-import { APP_TYPES, FORM_STEPS, ZONES, LAND_USES, APPLICANT_TYPE_LABELS } from '../../constants/applicationForms'
-import { submitApplication } from '../../api/applicant'
+import { APP_TYPES, FORM_STEPS, ZONES, LAND_USES, APPLICANT_TYPE_LABELS, DOC_TYPES } from '../../constants/applicationForms'
+import { submitApplication, uploadDocument } from '../../api/applicant'
 import { apiError } from '../../utils/apiError'
+
+function fmtSize(bytes) {
+  if (!bytes) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
 
 const TYPE_LABEL = Object.fromEntries(APP_TYPES.map(t => [t.key, t.label]))
 
@@ -124,7 +131,15 @@ export default function SubmitApplication() {
   const [confirmed, setConfirmed] = useState(false)
   const [parcel, setParcel] = useState({ parcel_no: '', block_no: '', basin_no: '', zone_id: ZONES[0] })
   const [point, setPoint] = useState(null)
+  const [docs, setDocs] = useState([])
   const [busy, setBusy] = useState(false)
+
+  function addFiles(fileList) {
+    const picked = Array.from(fileList).map(f => ({ name: f.name, size: f.size, type: 'other' }))
+    setDocs(d => [...d, ...picked])
+  }
+  function setDocType(i, type) { setDocs(d => d.map((doc, idx) => idx === i ? { ...doc, type } : doc)) }
+  function removeDoc(i) { setDocs(d => d.filter((_, idx) => idx !== i)) }
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
 
@@ -152,6 +167,11 @@ export default function SubmitApplication() {
         },
         description: `${TYPE_LABEL[selectedType]} application by ${user?.name || applicantId}`,
       })
+      for (const doc of docs) {
+        try {
+          await uploadDocument(res.application_id, { document_type: doc.type, file_name: doc.name, file_path: doc.name })
+        } catch { /* keep going; documents are optional */ }
+      }
       setResult(res)
       setConfirmed(true)
     } catch (e) {
@@ -358,60 +378,42 @@ export default function SubmitApplication() {
       {step === 4 && (
         <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[28px] max-w-[680px]">
           <div className="text-[17px] font-bold mb-[5px]">Upload Documents &amp; Submit</div>
-          <div className="text-[13px] text-[#5e6b65] mb-[22px]">Attach the required ownership and identity documents, then submit.</div>
+          <div className="text-[13px] text-[#5e6b65] mb-[22px]">Attach your ownership and identity documents, then submit.</div>
 
-          <div className="flex flex-col gap-[10px] mb-[20px]">
-            {[
-              { label: 'Ownership Deed',   detail: 'ownership_deed.pdf · 2.4 MB', done: true },
-              { label: 'National ID Copy', detail: 'id_copy.pdf · 640 KB',        done: true },
-              { label: 'Sale Contract',    detail: 'Required · Click to upload',   done: false },
-            ].map(doc => (
-              <div
-                key={doc.label}
-                className={`flex items-center gap-[13px] p-[14px] rounded-[11px] border ${doc.done ? 'border-[#e3e8e5]' : 'border-dashed border-[#c2ccc7] cursor-pointer hover:bg-[#f7f9f8] hover:border-[#1f5f4f] transition-colors'}`}
-              >
-                <div
-                  className="w-[38px] h-[38px] rounded-[8px] flex items-center justify-center shrink-0"
-                  style={{ background: doc.done ? '#e2f3e9' : '#f0f3f1' }}
-                >
-                  {doc.done ? (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1f7a4d" strokeWidth="2.5">
-                      <polyline points="20 6 9 17 4 12"/>
+          {docs.length > 0 && (
+            <div className="flex flex-col gap-[10px] mb-[16px]">
+              {docs.map((doc, i) => (
+                <div key={i} className="flex items-center gap-[13px] p-[12px] rounded-[11px] border border-[#e3e8e5]">
+                  <div className="w-[36px] h-[36px] rounded-[8px] bg-[#e7f1ee] flex items-center justify-center shrink-0">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1f5f4f" strokeWidth="2">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
                     </svg>
-                  ) : (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9aa8a2" strokeWidth="2">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                      <polyline points="17 8 12 3 7 8"/>
-                      <line x1="12" y1="3" x2="12" y2="15"/>
-                    </svg>
-                  )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-semibold text-[#16201c] truncate">{doc.name}</div>
+                    <div className="text-[11.5px] text-[#9aa8a2]">{fmtSize(doc.size)}</div>
+                  </div>
+                  <FormSelect value={doc.type} onChange={e => setDocType(i, e.target.value)} className="w-[160px] py-[7px] text-[12px]">
+                    {DOC_TYPES.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+                  </FormSelect>
+                  <button type="button" onClick={() => removeDoc(i)} className="text-[#9aa8a2] hover:text-[#b91c1c] transition-colors shrink-0">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  </button>
                 </div>
-                <div className="flex-1">
-                  <div className="text-[13.5px] font-semibold" style={{ color: doc.done ? undefined : '#5e6b65' }}>{doc.label}</div>
-                  <div className="text-[11.5px]" style={{ color: doc.done ? '#5e6b65' : '#9aa8a2' }}>{doc.detail}</div>
-                </div>
-                <span
-                  className="text-[11px] font-semibold px-[10px] py-1 rounded-full"
-                  style={doc.done
-                    ? { color: '#1f7a4d', background: '#e2f3e9' }
-                    : { color: '#b45309', background: '#fbeedd' }
-                  }
-                >
-                  {doc.done ? 'Uploaded' : 'Missing'}
-                </span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
-          <div className="border border-dashed border-[#c2ccc7] rounded-[11px] p-[24px] text-center cursor-pointer mb-[20px] hover:bg-[#f7f9f8] hover:border-[#1f5f4f] transition-colors">
+          <label className="block border border-dashed border-[#c2ccc7] rounded-[11px] p-[24px] text-center cursor-pointer mb-[20px] hover:bg-[#f7f9f8] hover:border-[#1f5f4f] transition-colors">
+            <input type="file" multiple className="hidden" onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#9aa8a2" strokeWidth="1.5" className="mx-auto mb-2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
               <polyline points="17 8 12 3 7 8"/>
               <line x1="12" y1="3" x2="12" y2="15"/>
             </svg>
-            <div className="text-[13px] font-semibold text-[#384640]">Drop additional files here or click to browse</div>
-            <div className="text-[11.5px] text-[#9aa8a2] mt-1">PDF, JPG, PNG · Max 10 MB per file</div>
-          </div>
+            <div className="text-[13px] font-semibold text-[#384640]">Click to browse and add files</div>
+            <div className="text-[11.5px] text-[#9aa8a2] mt-1"> Choose a document type for each file</div>
+          </label>
 
           {error && <div className="mb-[14px] text-[12.5px] text-[#b91c1c] bg-[#fbe6e6] border border-[#f0c4c4] rounded-[9px] px-3 py-2">{error}</div>}
 
