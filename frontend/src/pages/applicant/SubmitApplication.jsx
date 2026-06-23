@@ -1,9 +1,36 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { MapContainer, TileLayer, CircleMarker, useMapEvents } from 'react-leaflet'
+import 'leaflet/dist/leaflet.css'
 import ApplicantShell from '../../components/ApplicantShell'
 import { useApplicant } from '../../context/ApplicantContext'
 import FormSelect from '../../components/ui/FormSelect'
 import { APP_TYPES, FORM_STEPS, ZONES, LAND_USES, APPLICANT_TYPE_LABELS } from '../../constants/applicationForms'
+import { submitApplication } from '../../api/applicant'
+import { apiError } from '../../utils/apiError'
+
+const TYPE_LABEL = Object.fromEntries(APP_TYPES.map(t => [t.key, t.label]))
+
+function ClickCapture({ onPick }) {
+  useMapEvents({ click(e) { onPick(e.latlng) } })
+  return null
+}
+
+function LocationPicker({ point, onPick }) {
+  return (
+    <MapContainer center={[31.9022, 35.2034]} zoom={14} style={{ height: 220 }} scrollWheelZoom>
+      <TileLayer attribution="© OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+      <ClickCapture onPick={onPick} />
+      {point && <CircleMarker center={[point.lat, point.lng]} radius={9} pathOptions={{ color: '#1f5f4f', fillColor: '#1f5f4f', fillOpacity: 0.6 }} />}
+    </MapContainer>
+  )
+}
+
+function fmtDateTime(value) {
+  if (!value) return ''
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('en-US', { month: 'short', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
 
 function StepIndicator({ step }) {
   return (
@@ -95,10 +122,44 @@ export default function SubmitApplication() {
   const [step, setStep] = useState(1)
   const [selectedType, setSelectedType] = useState(null)
   const [confirmed, setConfirmed] = useState(false)
+  const [parcel, setParcel] = useState({ parcel_no: '', block_no: '', basin_no: '', zone_id: ZONES[0] })
+  const [point, setPoint] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [result, setResult] = useState(null)
+
+  const setP = (k) => (e) => setParcel(p => ({ ...p, [k]: e.target.value }))
 
   function next() { if (step < 4) setStep(s => s + 1) }
   function prev() { if (step > 1) setStep(s => s - 1) }
-  function submit() { setConfirmed(true) }
+
+  async function submit() {
+    setError('')
+    if (!selectedType) { setError('Please select an application type.'); setStep(1); return }
+    if (!parcel.parcel_no.trim() || !parcel.block_no.trim()) {
+      setError('Please enter the parcel and block number.'); setStep(3); return
+    }
+    const applicantId = user?.applicant_id || user?.nationalId || user?.id
+    setBusy(true)
+    try {
+      const res = await submitApplication({
+        application_type: selectedType,
+        priority: 'normal',
+        applicant_ref: { applicant_id: applicantId, applicant_type: user?.applicantType || 'citizen' },
+        parcel: {
+          parcel_no: parcel.parcel_no, block_no: parcel.block_no, basin_no: parcel.basin_no || null, zone_id: parcel.zone_id,
+          geometry: point ? { type: 'Point', coordinates: [point.lng, point.lat] } : null,
+        },
+        description: `${TYPE_LABEL[selectedType]} application by ${user?.name || applicantId}`,
+      })
+      setResult(res)
+      setConfirmed(true)
+    } catch (e) {
+      setError(apiError(e, 'Could not submit application'))
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const subtitle = confirmed
     ? 'Your application has been submitted successfully'
@@ -122,24 +183,24 @@ export default function SubmitApplication() {
             <div className="flex flex-col gap-[14px] text-[13.5px]">
               <div className="flex justify-between items-center">
                 <span className="text-[#5e6b65]">Application ID</span>
-                <span className="mono font-semibold text-[15px]">LRMIS-2026-0004</span>
+                <span className="mono font-semibold text-[15px]">{result?.application_id}</span>
               </div>
               <div className="border-t border-[#f2f4f3]" />
               <div className="flex justify-between items-center">
                 <span className="text-[#5e6b65]">Type</span>
-                <span className="font-semibold">Ownership Transfer</span>
+                <span className="font-semibold">{TYPE_LABEL[result?.application_type] || result?.application_type}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-[#5e6b65]">Status</span>
-                <span className="text-[11.5px] font-semibold px-[11px] py-1 rounded-full text-[#1e5fae] bg-[#e7f0fb]">Submitted</span>
+                <span className="text-[11.5px] font-semibold px-[11px] py-1 rounded-full text-[#1e5fae] bg-[#e7f0fb] capitalize">{result?.status}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-[#5e6b65]">Submitted</span>
-                <span>Feb 15, 2026 · 09:32 AM</span>
+                <span>{fmtDateTime(result?.submission_date)}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-[#5e6b65]">Parcel</span>
-                <span className="mono">145 / 12 · ZONE-RM-01</span>
+                <span className="mono">{result?.parcel?.parcel_no} / {result?.parcel?.block_no} · {result?.parcel?.zone_id}</span>
               </div>
               <div className="border-t border-[#f2f4f3]" />
               <div className="flex justify-between items-center">
@@ -149,19 +210,8 @@ export default function SubmitApplication() {
             </div>
           </div>
 
-          <div className="bg-[#fdf6e8] border border-[#f0d49b] rounded-[11px] px-[18px] py-[14px] mt-[14px] text-left flex gap-[12px] items-start">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="2" className="shrink-0 mt-px">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="12" y1="8" x2="12" y2="12"/>
-              <line x1="12" y1="16" x2="12.01" y2="16"/>
-            </svg>
-            <div className="text-[12.5px] text-[#92400e] leading-relaxed">
-              <span className="font-semibold">1 missing document:</span> Sale Contract. Upload it from your dashboard to move your application forward.
-            </div>
-          </div>
-
           <div className="flex gap-[10px] justify-center mt-[24px]">
-            <BtnSecondary onClick={() => navigate('/applicant/track/LRMIS-2026-0001')}>
+            <BtnSecondary onClick={() => navigate(`/applicant/track/${result?.application_id}`)}>
               Track Application
             </BtnSecondary>
             <BtnPrimary onClick={() => navigate('/applicant')}>
@@ -259,20 +309,20 @@ export default function SubmitApplication() {
           <div className="grid grid-cols-2 gap-[16px]">
             <div>
               <FieldLabel>Parcel Number *</FieldLabel>
-              <Input placeholder="e.g. 145" className="w-full border border-[#e3e8e5] rounded-[9px] px-[13px] py-[11px] text-[13px] outline-none mono" />
+              <Input placeholder="e.g. 145" className="w-full border border-[#e3e8e5] rounded-[9px] px-[13px] py-[11px] text-[13px] outline-none mono" value={parcel.parcel_no} onChange={setP('parcel_no')} />
             </div>
             <div>
               <FieldLabel>Block Number *</FieldLabel>
-              <Input placeholder="e.g. 12" className="w-full border border-[#e3e8e5] rounded-[9px] px-[13px] py-[11px] text-[13px] outline-none mono" />
+              <Input placeholder="e.g. 12" className="w-full border border-[#e3e8e5] rounded-[9px] px-[13px] py-[11px] text-[13px] outline-none mono" value={parcel.block_no} onChange={setP('block_no')} />
             </div>
             <div>
-              <FieldLabel>Basin Number *</FieldLabel>
-              <Input placeholder="e.g. 3" className="w-full border border-[#e3e8e5] rounded-[9px] px-[13px] py-[11px] text-[13px] outline-none mono" />
+              <FieldLabel>Basin Number</FieldLabel>
+              <Input placeholder="e.g. 3" className="w-full border border-[#e3e8e5] rounded-[9px] px-[13px] py-[11px] text-[13px] outline-none mono" value={parcel.basin_no} onChange={setP('basin_no')} />
             </div>
             <div>
               <FieldLabel>Zone *</FieldLabel>
-              <FormSelect>
-                {ZONES.map(z => <option key={z}>{z}</option>)}
+              <FormSelect value={parcel.zone_id} onChange={setP('zone_id')}>
+                {ZONES.map(z => <option key={z} value={z}>{z}</option>)}
               </FormSelect>
             </div>
             <div className="col-span-2">
@@ -285,12 +335,15 @@ export default function SubmitApplication() {
 
           <div className="mt-[18px]">
             <FieldLabel>Parcel Location</FieldLabel>
-            <div className="h-[160px] bg-[#eef3f0] border border-dashed border-[#c2ccc7] rounded-[11px] flex items-center justify-center gap-[9px] text-[#5e6b65] text-[13px]">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9aa8a2" strokeWidth="2">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                <circle cx="12" cy="10" r="3"/>
-              </svg>
-              Click on map to set parcel location
+            <div className="overflow-hidden rounded-[11px] border border-[#e3e8e5]">
+              <LocationPicker point={point} onPick={setPoint} />
+            </div>
+            <div className="flex items-center gap-2 mt-2 text-[12px]">
+              <span className={`w-[8px] h-[8px] rounded-full ${point ? 'bg-[#1f5f4f]' : 'bg-[#cdd6d2]'}`} />
+              <span className="text-[#5e6b65]">
+                {point ? <>Location set · <span className="mono">{point.lat.toFixed(5)}, {point.lng.toFixed(5)}</span></> : 'Click on the map to set the parcel location (optional)'}
+              </span>
+              {point && <button type="button" onClick={() => setPoint(null)} className="text-[#9aa8a2] hover:text-[#b91c1c] ml-1 text-[11.5px] underline">clear</button>}
             </div>
           </div>
 
@@ -360,14 +413,17 @@ export default function SubmitApplication() {
             <div className="text-[11.5px] text-[#9aa8a2] mt-1">PDF, JPG, PNG · Max 10 MB per file</div>
           </div>
 
+          {error && <div className="mb-[14px] text-[12.5px] text-[#b91c1c] bg-[#fbe6e6] border border-[#f0c4c4] rounded-[9px] px-3 py-2">{error}</div>}
+
           <div className="flex justify-between">
             <BtnSecondary onClick={prev}>Back</BtnSecondary>
             <button
               onClick={submit}
-              className="px-[24px] py-[10px] border-none rounded-[9px] bg-[#1f5f4f] text-white text-[13.5px] font-semibold cursor-pointer hover:bg-[#184c40] transition-colors"
+              disabled={busy}
+              className="px-[24px] py-[10px] border-none rounded-[9px] bg-[#1f5f4f] text-white text-[13.5px] font-semibold cursor-pointer hover:bg-[#184c40] transition-colors disabled:opacity-60 disabled:cursor-wait"
               style={{ fontFamily: 'inherit' }}
             >
-              Submit Application
+              {busy ? 'Submitting…' : 'Submit Application'}
             </button>
           </div>
         </div>

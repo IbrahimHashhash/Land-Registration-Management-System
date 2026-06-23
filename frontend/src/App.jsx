@@ -1,5 +1,6 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Link, Outlet } from 'react-router-dom'
+import Login from './pages/Login'
 import RegisterApplicant from './pages/RegisterApplicant'
 import ApplicantProfile from './pages/ApplicantProfile'
 import StaffDashboard from './pages/StaffDashboard'
@@ -32,8 +33,11 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Login / role selection */}
+        <Route path="/"                    element={<Login />} />
+
         {/* Staff console */}
-        <Route path="/"                    element={<StaffDashboard />} />
+        <Route path="/dashboard"           element={<StaffDashboard />} />
         <Route path="/applications"        element={<ApplicationManagement />} />
         <Route path="/applications/new"    element={<NewApplication />} />
         <Route path="/applications/:id"    element={<ApplicationDetails />} />
@@ -41,13 +45,13 @@ export default function App() {
         <Route path="/certificates"        element={<CertificateIssuance />} />
         <Route path="/register" element={
           <div className="max-w-3xl mx-auto px-6 py-8">
-            <Link to="/" className="text-sm text-blue-600 hover:underline">← Back to Dashboard</Link>
+            <Link to="/dashboard" className="text-sm text-blue-600 hover:underline">← Back to Dashboard</Link>
             <RegisterApplicant />
           </div>
         } />
         <Route path="/profile" element={
           <div className="max-w-5xl mx-auto px-6 py-8">
-            <Link to="/" className="text-sm text-blue-600 hover:underline">← Back to Dashboard</Link>
+            <Link to="/dashboard" className="text-sm text-blue-600 hover:underline">← Back to Dashboard</Link>
             <ApplicantProfile />
           </div>
         } />
