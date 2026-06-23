@@ -43,6 +43,12 @@ def create_applicant(data: ApplicantCreate) -> dict:
     try:
         applicants_col.insert_one(doc)
     except DuplicateKeyError:
+        # Idempotent by national_id: the applicant already exists but the caller
+        # lost its applicant_id (e.g. cleared browser storage). Return the existing
+        # record so the client can recover the id instead of being locked out.
+        existing = applicants_col.find_one({"identity.national_id": data.identity.national_id})
+        if existing:
+            return existing
         raise HTTPException(status_code=409, detail="National ID already registered")
     return doc
 
@@ -97,6 +103,16 @@ def add_comment(application_id: str, data: CommentCreate) -> dict:
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Application not found")
+    logs_col.update_one(
+        {"application_id": application_id},
+        {"$push": {"event_stream": {
+            "type": "comment_added",
+            "by": {"actor_type": "applicant", "actor_id": data.author_id},
+            "at": now,
+            "meta": {"comment_id": comment["comment_id"], "text": data.text},
+        }}, "$setOnInsert": {"application_id": application_id, "computed_kpis": {}}},
+        upsert=True
+    )
     return comment
 
 def submit_objection(application_id: str ,data: ObjectionCreate) -> dict:

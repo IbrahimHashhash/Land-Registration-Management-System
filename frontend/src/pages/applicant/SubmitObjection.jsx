@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ApplicantShell from '../../components/ApplicantShell'
 import { useApplicant } from '../../context/ApplicantContext'
@@ -16,8 +16,20 @@ export default function SubmitObjection() {
   const [reason,  setReason]  = useState('')
   const [status,  setStatus]  = useState('idle') // idle | loading | success | error
   const [errMsg,  setErrMsg]  = useState('')
+  const [attachments, setAttachments] = useState([]) // file names (metadata only)
+  const fileRef = useRef(null)
 
   const selectedApp = apps[selectedAppIdx]
+
+  function handleFileChange(e) {
+    const names = Array.from(e.target.files || []).map(f => f.name)
+    if (names.length) setAttachments(prev => [...new Set([...prev, ...names])])
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
+  function removeAttachment(name) {
+    setAttachments(prev => prev.filter(n => n !== name))
+  }
 
   async function handleSubmit() {
     if (!reason.trim()) {
@@ -31,7 +43,7 @@ export default function SubmitObjection() {
       await submitObjection(selectedApp.id, {
         author_id: user.applicant_id || user.id,
         reason: reason.trim(),
-        supporting_documents: [],
+        supporting_documents: attachments,
       })
       setStatus('success')
     } catch (err) {
@@ -85,15 +97,52 @@ export default function SubmitObjection() {
 
             <div>
               <label className="text-[12px] font-semibold text-[#384640] block mb-[8px]">Supporting Documents</label>
-              <div className="border-2 border-dashed border-[#c2ccc7] rounded-[11px] p-[24px] text-center cursor-pointer hover:bg-[#f7f9f8] hover:border-[#1f5f4f] transition-colors">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9aa8a2" strokeWidth="1.5" className="mx-auto mb-[6px]">
+              <input
+                ref={fileRef}
+                type="file"
+                multiple
+                accept=".pdf,.jpg,.jpeg,.png"
+                onChange={handleFileChange}
+                className="hidden"
+                id="objection-files"
+              />
+              <label
+                htmlFor="objection-files"
+                className="border-2 border-dashed border-[#c2ccc7] rounded-[11px] p-[24px] text-center cursor-pointer hover:bg-[#f7f9f8] hover:border-[#1f5f4f] transition-colors flex flex-col items-center"
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9aa8a2" strokeWidth="1.5" className="mb-[6px]">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                   <polyline points="17 8 12 3 7 8"/>
                   <line x1="12" y1="3" x2="12" y2="15"/>
                 </svg>
                 <div className="text-[13px] font-semibold text-[#384640]">Attach evidence</div>
                 <div className="text-[11.5px] text-[#9aa8a2] mt-[3px]">PDF, JPG, PNG · Max 10 MB per file</div>
-              </div>
+              </label>
+
+              {attachments.length > 0 && (
+                <div className="flex flex-col gap-[8px] mt-[12px]">
+                  {attachments.map(name => (
+                    <div key={name} className="flex items-center gap-[11px] px-[13px] py-[10px] bg-[#f7f9f8] border border-[#eef1ef] rounded-[9px]">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#5e6b65" strokeWidth="2" className="shrink-0">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                      </svg>
+                      <span className="flex-1 min-w-0 truncate text-[12.5px] text-[#384640]">{name}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment(name)}
+                        className="text-[#9aa8a2] hover:text-[#be123c] transition-colors cursor-pointer bg-transparent border-none p-0 shrink-0"
+                        title="Remove"
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <line x1="18" y1="6" x2="6" y2="18"/>
+                          <line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

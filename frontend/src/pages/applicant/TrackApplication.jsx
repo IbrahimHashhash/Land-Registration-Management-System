@@ -39,6 +39,7 @@ function mapApiTimeline(events) {
       hour: '2-digit', minute: '2-digit',
     }),
     dot: TYPE_DOTS[t.type] || '#9aa8a2',
+    detail: t.meta?.text || t.meta?.reason || null,
   }))
 }
 
@@ -57,6 +58,19 @@ export default function TrackApplication() {
   const [commentText,   setCommentText]   = useState('')
   const [commentStatus, setCommentStatus] = useState('idle') // idle | loading | success | error
 
+  function refreshTimeline() {
+    if (!app?.id) return
+    setTimelineLoading(true)
+    getTimeline(app.id)
+      .then(events => {
+        if (Array.isArray(events) && events.length > 0) {
+          setTimeline(mapApiTimeline(events))
+        }
+      })
+      .catch(() => { /* keep static timeline */ })
+      .finally(() => setTimelineLoading(false))
+  }
+
   async function handleComment() {
     if (!commentText.trim()) return
     setCommentStatus('loading')
@@ -67,23 +81,15 @@ export default function TrackApplication() {
       })
       setCommentStatus('success')
       setCommentText('')
+      refreshTimeline()
     } catch {
       setCommentStatus('error')
     }
   }
 
   useEffect(() => {
-    if (!app?.id) return
     setTimeline(staticData?.timeline || [])
-    setTimelineLoading(true)
-    getTimeline(app.id)
-      .then(events => {
-        if (Array.isArray(events) && events.length > 0) {
-          setTimeline(mapApiTimeline(events))
-        }
-      })
-      .catch(() => { /* keep static timeline */ })
-      .finally(() => setTimelineLoading(false))
+    refreshTimeline()
   }, [app?.id])
 
   if (!app || !staticData) {
@@ -174,6 +180,11 @@ export default function TrackApplication() {
                   <div className="text-[13px] font-semibold mt-[-3px]">{t.event}</div>
                   <div className="text-[11.5px] text-[#5e6b65] mt-[2px]">{t.actor}</div>
                   <div className="text-[11px] text-[#9aa8a2] mono mt-[2px]">{t.time}</div>
+                  {t.detail && (
+                    <div className="text-[12px] text-[#384640] mt-[7px] bg-[#f7f9f8] border border-[#eef1ef] rounded-[8px] px-[11px] py-[8px] leading-relaxed">
+                      {t.detail}
+                    </div>
+                  )}
                 </div>
               ))}
               {staticData.nextStep && (

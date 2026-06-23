@@ -6,7 +6,7 @@ import {
   getStoredApplicantId,
   storeApplicantId,
 } from '../../context/ApplicantContext'
-import { registerApplicant } from '../../api/applicant'
+import { registerApplicant, getApplicant } from '../../api/applicant'
 
 const USER_LIST = [
   { key: 'nour',   ...APPLICANT_USERS.nour },
@@ -23,18 +23,30 @@ export default function ApplicantLogin() {
     const localUser = APPLICANT_USERS[key]
     setLoading(key)
 
-    let applicantId = getStoredApplicantId(localUser.nationalId)
-
-    if (!applicantId) {
+    // Register fresh and cache the new backend id.
+    // Returns null if registration fails (e.g. 409 with no recoverable id).
+    async function registerFresh() {
       try {
         const result = await registerApplicant(localUser)
-        applicantId = result.applicant_id
-        storeApplicantId(localUser.nationalId, applicantId)
-      } catch (err) {
-        // 409 = already registered but we don't have the ID; proceed without it
-        // Other errors: also proceed with local-only mode
-        applicantId = null
+        storeApplicantId(localUser.nationalId, result.applicant_id)
+        return result.applicant_id
+      } catch {
+        return null
       }
+    }
+
+    let applicantId = getStoredApplicantId(localUser.nationalId)
+
+    if (applicantId) {
+      // Validate the cached id still exists — the DB may have been reseeded,
+      // leaving a stale APP-id in localStorage that 404s on every request.
+      try {
+        await getApplicant(applicantId)
+      } catch {
+        applicantId = await registerFresh()
+      }
+    } else {
+      applicantId = await registerFresh()
     }
 
     setUser({ ...localUser, applicant_id: applicantId })
