@@ -31,6 +31,11 @@ export async function getApplicantApplications(applicantId) {
   return res.data
 }
 
+export async function getApplication(applicationId) {
+  const res = await api.get(`/applications/${applicationId}`)
+  return res.data
+}
+
 export async function getTimeline(applicationId) {
   const res = await api.get(`/applications/${applicationId}/timeline`)
   return res.data

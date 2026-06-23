@@ -35,13 +35,16 @@ export default function ApplicantLogin() {
       }
     }
 
-    let applicantId = getStoredApplicantId(localUser.nationalId)
+    // Prefer a cached id, else the seeded demo id (so the portal resolves to the
+    // seeded applicant that owns the seeded applications).
+    let applicantId = getStoredApplicantId(localUser.nationalId) || localUser.seededApplicantId
 
     if (applicantId) {
-      // Validate the cached id still exists — the DB may have been reseeded,
-      // leaving a stale APP-id in localStorage that 404s on every request.
+      // Validate the id exists — the DB may not be seeded, or a cached APP-id may
+      // be stale after a reseed. Either way, fall back to registering fresh.
       try {
         await getApplicant(applicantId)
+        storeApplicantId(localUser.nationalId, applicantId)
       } catch {
         applicantId = await registerFresh()
       }

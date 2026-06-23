@@ -1,25 +1,47 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ApplicantShell from '../../components/ApplicantShell'
 import { useApplicant } from '../../context/ApplicantContext'
-import { getAppsForUser, getObjectionsForUser } from '../../data/applicantApps'
-import { submitObjection } from '../../api/applicant'
+import { getApplicantApplications, submitObjection } from '../../api/applicant'
 import FormSelect from '../../components/ui/FormSelect'
+import { TYPES } from '../../theme'
+
+const OBJECTION_STATUS = {
+  open:         { fg: '#b45309', bg: '#fbeedd' },
+  under_review: { fg: '#1e5fae', bg: '#e7f0fb' },
+  resolved:     { fg: '#1f7a4d', bg: '#e2f3e9' },
+}
+
+function titleCase(s) {
+  return String(s || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
 
 export default function SubmitObjection() {
   const { user } = useApplicant()
   const navigate = useNavigate()
-  const apps = getAppsForUser(user?.id)
-  const existingObjections = getObjectionsForUser(user?.id)
 
-  const [selectedAppIdx, setSelectedAppIdx] = useState(0)
+  const [apps, setApps]               = useState([])
+  const [appsLoading, setAppsLoading] = useState(true)
+  const [selectedAppId, setSelectedAppId] = useState('')
   const [reason,  setReason]  = useState('')
   const [status,  setStatus]  = useState('idle') // idle | loading | success | error
   const [errMsg,  setErrMsg]  = useState('')
   const [attachments, setAttachments] = useState([]) // file names (metadata only)
+  const [objections, setObjections]   = useState([]) // objections filed this session (from API responses)
   const fileRef = useRef(null)
 
-  const selectedApp = apps[selectedAppIdx]
+  useEffect(() => {
+    if (!user?.applicant_id) { setAppsLoading(false); return }
+    setAppsLoading(true)
+    getApplicantApplications(user.applicant_id)
+      .then(list => {
+        const arr = Array.isArray(list) ? list : []
+        setApps(arr)
+        setSelectedAppId(prev => prev || arr[0]?.application_id || '')
+      })
+      .catch(() => setApps([]))
+      .finally(() => setAppsLoading(false))
+  }, [user?.applicant_id])
 
   function handleFileChange(e) {
     const names = Array.from(e.target.files || []).map(f => f.name)
@@ -32,6 +54,7 @@ export default function SubmitObjection() {
   }
 
   async function handleSubmit() {
+    if (!selectedAppId) return
     if (!reason.trim()) {
       setErrMsg('Please describe your objection.')
       setStatus('error')
@@ -40,12 +63,15 @@ export default function SubmitObjection() {
     setStatus('loading')
     setErrMsg('')
     try {
-      await submitObjection(selectedApp.id, {
-        author_id: user.applicant_id || user.id,
+      const result = await submitObjection(selectedAppId, {
+        author_id: user.applicant_id,
         reason: reason.trim(),
         supporting_documents: attachments,
       })
       setStatus('success')
+      setObjections(prev => [result, ...prev])
+      setReason('')
+      setAttachments([])
     } catch (err) {
       const detail = err.response?.data?.detail
       if (err.response?.status === 404) {
@@ -65,6 +91,17 @@ export default function SubmitObjection() {
       subtitle="File a dispute against a registration decision"
     >
       <div className="max-w-[680px]">
+        {appsLoading ? (
+          <div className="py-10 flex items-center justify-center gap-2 text-[13px] text-[#9aa8a2]">
+            <div className="w-4 h-4 border-2 border-[#1f5f4f] border-t-transparent rounded-full animate-spin" />
+            Loading…
+          </div>
+        ) : apps.length === 0 ? (
+          <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[28px] text-[13px] text-[#9aa8a2]">
+            You have no applications to file an objection against.
+          </div>
+        ) : (
+        <>
         <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[28px] mb-[16px]">
           <div className="text-[17px] font-bold mb-[5px]">Submit Objection</div>
           <div className="text-[13px] text-[#5e6b65] mb-[22px]">
@@ -75,11 +112,13 @@ export default function SubmitObjection() {
             <div>
               <label className="text-[12px] font-semibold text-[#384640] block mb-[6px]">Application *</label>
               <FormSelect
-                value={selectedAppIdx}
-                onChange={e => { setSelectedAppIdx(Number(e.target.value)); setStatus('idle') }}
+                value={selectedAppId}
+                onChange={e => { setSelectedAppId(e.target.value); setStatus('idle') }}
               >
-                {apps.map((a, i) => (
-                  <option key={a.id} value={i}>{a.id} · {a.typeLabel} · Parcel {a.parcel}</option>
+                {apps.map(a => (
+                  <option key={a.application_id} value={a.application_id}>
+                    {a.application_id} · {TYPES[a.application_type] || titleCase(a.application_type)}
+                  </option>
                 ))}
               </FormSelect>
             </div>
@@ -188,35 +227,37 @@ export default function SubmitObjection() {
           )}
         </div>
 
-        {/* Existing objections */}
+        {/* Objections filed this session (from the API response) */}
         <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
           <div className="text-[14.5px] font-bold mb-[14px]">My Objections</div>
-          {existingObjections.length === 0 ? (
+          {objections.length === 0 ? (
             <div className="text-[13px] text-[#9aa8a2] py-[8px]">No objections filed yet.</div>
-          ) : existingObjections.map(obj => (
-            <div key={obj.id} className="flex items-center gap-[13px] p-[14px] border border-[#eef1ef] rounded-[11px]">
-              <div className="w-[40px] h-[40px] rounded-[9px] bg-[#fbe4ea] flex items-center justify-center shrink-0">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#be123c" strokeWidth="2">
-                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                  <line x1="12" y1="9" x2="12" y2="13"/>
-                  <line x1="12" y1="17" x2="12.01" y2="17"/>
-                </svg>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-[9px]">
-                  <span className="mono text-[13px] font-semibold">{obj.id}</span>
-                  <span
-                    className="text-[10.5px] font-semibold px-[9px] py-[3px] rounded-full"
-                    style={{ color: obj.statusFg, background: obj.statusBg }}
-                  >
-                    {obj.status}
-                  </span>
+          ) : objections.map(obj => {
+            const os = OBJECTION_STATUS[obj.status] || { fg: '#475569', bg: '#eef1f4' }
+            return (
+              <div key={obj.objection_id} className="flex items-center gap-[13px] p-[14px] border border-[#eef1ef] rounded-[11px] mb-[8px] last:mb-0">
+                <div className="w-[40px] h-[40px] rounded-[9px] bg-[#fbe4ea] flex items-center justify-center shrink-0">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#be123c" strokeWidth="2">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                    <line x1="12" y1="9" x2="12" y2="13"/>
+                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                  </svg>
                 </div>
-                <div className="text-[12.5px] text-[#5e6b65] mt-1">{obj.desc}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-[9px]">
+                    <span className="mono text-[13px] font-semibold">{obj.objection_id}</span>
+                    <span className="text-[10.5px] font-semibold px-[9px] py-[3px] rounded-full" style={{ color: os.fg, background: os.bg }}>
+                      {titleCase(obj.status)}
+                    </span>
+                  </div>
+                  <div className="text-[12.5px] text-[#5e6b65] mt-1">{obj.application_id} · {obj.reason}</div>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
+        </>
+        )}
       </div>
     </ApplicantShell>
   )
