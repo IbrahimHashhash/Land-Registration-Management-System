@@ -154,7 +154,7 @@ export default function SubmitApplication() {
     if (!parcel.parcel_no.trim() || !parcel.block_no.trim()) {
       setError('Please enter the parcel and block number.'); setStep(3); return
     }
-    const applicantId = user?.applicant_id || user?.nationalId || user?.id
+    const applicantId = user?.applicant_id || user?.applicantId || user?.id
     setBusy(true)
     try {
       const res = await submitApplication({
