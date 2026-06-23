@@ -103,6 +103,16 @@ def add_comment(application_id: str, data: CommentCreate) -> dict:
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Application not found")
+    logs_col.update_one(
+        {"application_id": application_id},
+        {"$push": {"event_stream": {
+            "type": "comment_added",
+            "by": {"actor_type": "applicant", "actor_id": data.author_id},
+            "at": now,
+            "meta": {"comment_id": comment["comment_id"], "text": data.text},
+        }}, "$setOnInsert": {"application_id": application_id, "computed_kpis": {}}},
+        upsert=True
+    )
     return comment
 
 def submit_objection(application_id: str ,data: ObjectionCreate) -> dict:
