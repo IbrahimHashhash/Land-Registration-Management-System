@@ -1,7 +1,6 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Link, Outlet } from 'react-router-dom'
 import RegisterApplicant from './pages/RegisterApplicant'
-import ApplicantProfile from './pages/ApplicantProfile'
 import StaffDashboard from './pages/StaffDashboard'
 import ApplicationManagement from './pages/ApplicationManagement'
 import NewApplication from './pages/NewApplication'
@@ -15,6 +14,7 @@ import SubmitApplication from './pages/applicant/SubmitApplication'
 import TrackApplication from './pages/applicant/TrackApplication'
 import UploadDocuments from './pages/applicant/UploadDocuments'
 import SubmitObjection from './pages/applicant/SubmitObjection'
+import ApplicantProfile from './pages/applicant/ApplicantProfile'
 import SurveyorTaskList from './pages/surveyor/SurveyorTaskList'
 import SurveyorTaskExecution from './pages/surveyor/SurveyorTaskExecution'
 import LiveMap from './pages/surveyor/LiveMap'
@@ -45,12 +45,6 @@ export default function App() {
             <RegisterApplicant />
           </div>
         } />
-        <Route path="/profile" element={
-          <div className="max-w-5xl mx-auto px-6 py-8">
-            <Link to="/" className="text-sm text-blue-600 hover:underline">← Back to Dashboard</Link>
-            <ApplicantProfile />
-          </div>
-        } />
 
         {/* Applicant portal */}
         <Route path="/applicant" element={<ApplicantRoot />}>
@@ -61,6 +55,7 @@ export default function App() {
           <Route path="track/:id" element={<TrackApplication />} />
           <Route path="upload"    element={<UploadDocuments />} />
           <Route path="objection" element={<SubmitObjection />} />
+          <Route path="profile"   element={<ApplicantProfile />} />
         </Route>
 
         {/* Surveyor panel */}

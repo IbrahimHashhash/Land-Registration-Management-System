@@ -43,6 +43,12 @@ def create_applicant(data: ApplicantCreate) -> dict:
     try:
         applicants_col.insert_one(doc)
     except DuplicateKeyError:
+        # Idempotent by national_id: the applicant already exists but the caller
+        # lost its applicant_id (e.g. cleared browser storage). Return the existing
+        # record so the client can recover the id instead of being locked out.
+        existing = applicants_col.find_one({"identity.national_id": data.identity.national_id})
+        if existing:
+            return existing
         raise HTTPException(status_code=409, detail="National ID already registered")
     return doc
 
