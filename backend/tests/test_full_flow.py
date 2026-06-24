@@ -437,6 +437,66 @@ def test_staff_module():
 
 
 # ============================================================================
+# MODULE 3 (continued) - assignment policy + reassignment
+# ============================================================================
+def test_assignment_policy():
+    print("\n--- Module 3 Assignment Policy + Reassignment ---")
+
+    # Create a SECOND surveyor in a DIFFERENT zone, so we can test zone matching.
+    other_payload = {
+        "staff_code": TEST_STAFF_CODE + "B", "name": "Test Surveyor B", "role": "surveyor",
+        "skills": ["boundary_survey"],
+        "coverage": {"zone_ids": ["ZONE-OTHER-99"]},
+        "schedule": {"shifts": [], "on_call": True},
+        "workload": {"active_tasks": 0, "max_tasks": 5},
+    }
+    r = client.post("/staff/", json=other_payload, headers=SURVEYOR_HDR)
+    check("create second surveyor in different zone", r.status_code == 201)
+    other_surveyor_id = r.json()["id"]
+
+    # Create app in ZONE-TEST-99 — only the original surveyor should match.
+    payload = {
+        "application_type": "first_registration", "priority": "normal",
+        "applicant_ref": {"applicant_id": applicant_id, "applicant_type": "citizen"},
+        "parcel": {
+            "parcel_no": "555", "block_no": "55", "basin_no": "5", "zone_id": "ZONE-TEST-99",
+            "geometry": {"type": "Polygon", "coordinates": [[[35.20, 31.90], [35.21, 31.90], [35.21, 31.91], [35.20, 31.91], [35.20, 31.90]]]},
+        },
+    }
+    r = client.post("/applications/", json=payload)
+    aid = r.json()["application_id"]
+    client.patch(f"/applications/{aid}/transition", json={"to_state": "pre_checked"})
+    r = client.patch(f"/applications/{aid}/transition", json={"to_state": "survey_required"})
+    # Auto-assigned to the in-zone surveyor, NOT the out-of-zone one
+    check("policy: in-zone surveyor selected", (r.json().get("assignment") or {}).get("assigned_surveyor_id") == surveyor_id)
+
+    # Reassign manually to the other surveyor
+    r = client.patch(f"/applications/{aid}/reassign-surveyor",
+                     json={"new_surveyor_id": other_surveyor_id}, headers=REGISTRAR_HDR)
+    check("reassign-surveyor (200)", r.status_code == 200)
+    check("reassign updates task.assigned_surveyor_id", r.json().get("assigned_surveyor_id") == other_surveyor_id)
+    r = client.get(f"/applications/{aid}")
+    check("reassign updates app.assignment.assigned_surveyor_id", (r.json().get("assignment") or {}).get("assigned_surveyor_id") == other_surveyor_id)
+
+    # Reassigning to a registrar should fail — only surveyors are eligible.
+    r = client.patch(f"/applications/{aid}/reassign-surveyor",
+                     json={"new_surveyor_id": registrar_id}, headers=REGISTRAR_HDR)
+    check("reassign to non-surveyor blocked (400)", r.status_code == 400)
+
+    # Zone mismatch -> 404 no surveyor available
+    payload["parcel"]["zone_id"] = "ZONE-NOWHERE"
+    r = client.post("/applications/", json=payload)
+    aid2 = r.json()["application_id"]
+    client.patch(f"/applications/{aid2}/transition", json={"to_state": "pre_checked"})
+    client.patch(f"/applications/{aid2}/transition", json={"to_state": "survey_required"})
+    r = client.post(f"/applications/{aid2}/auto-assign-surveyor", headers=REGISTRAR_HDR)
+    check("policy: no surveyor in zone -> 404", r.status_code == 404)
+
+    # Cleanup the extra surveyor
+    staff_col.delete_one({"_id": ObjectId(other_surveyor_id)})
+
+
+# ============================================================================
 # MODULE 4 - Analytics, Map, Visualization
 # ============================================================================
 def test_analytics_module():
@@ -603,6 +663,7 @@ if __name__ == "__main__":
         test_application_module()
         test_documents_comments_objections()
         test_staff_module()
+        test_assignment_policy()
         test_analytics_module()
         test_annex_b_happy_path()
     finally:
