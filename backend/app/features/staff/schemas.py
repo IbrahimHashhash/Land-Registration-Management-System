@@ -128,6 +128,11 @@ class SurveyReportOut(BaseModel):
     uploaded_at: Optional[datetime] = None
 
 
+class SurveyResultsOut(BaseModel):
+    task: Optional[SurveyTaskOut] = None
+    reports: list[SurveyReportOut] = []
+
+
 
 class RegistrarReviewRequest(BaseModel):
     decision: str = Field(..., pattern="^(approved|rejected|on_hold|missing_documents|under_objection)$")

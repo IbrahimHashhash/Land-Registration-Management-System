@@ -206,6 +206,15 @@ export default function ApplicationDetails() {
               {app.assignment?.assigned_registrar_id && <> · Registrar <span className="mono">{app.assignment.assigned_registrar_id}</span></>}
             </div>
           </div>
+          {['surveyed', 'legal_review', 'under_objection'].includes(app.status) && (
+            <Link
+              to={`/review/${app.application_id}`}
+              className="inline-flex items-center gap-[7px] text-[13px] font-semibold no-underline bg-[#1f5f4f] text-white px-[14px] py-[9px] rounded-[9px] hover:bg-[#184c40] transition-colors"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              Open Registrar Review
+            </Link>
+          )}
         </div>
         <WorkflowProgress status={app.status} />
         {msg && <div className={`mt-3 text-[12.5px] border rounded-[8px] px-3 py-2 ${msgType === 'error' ? 'text-[#b91c1c] bg-[#fbe6e6] border-[#f0c4c4]' : 'text-[#1f7a4d] bg-[#e2f3e9] border-[#cfe8da]'}`}>{msg}</div>}
