@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState } from 'react'
 export const APPLICANT_USERS = {
   nour: {
     id: 'nour',
+    applicantId: 'APP-NOUR0001',
     name: 'Nour Ahmad',
     initials: 'NA',
     type: 'Citizen · Verified',
@@ -21,6 +22,7 @@ export const APPLICANT_USERS = {
   },
   khaled: {
     id: 'khaled',
+    applicantId: 'APP-KHAL0001',
     name: 'Khaled Mansour',
     initials: 'KM',
     type: 'Lawyer · Verified',
@@ -39,6 +41,7 @@ export const APPLICANT_USERS = {
   },
   lina: {
     id: 'lina',
+    applicantId: 'APP-LINA0001',
     name: 'Lina Haddad',
     initials: 'LH',
     type: 'Citizen · Unverified',

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { MapContainer, TileLayer, GeoJSON, Marker, Popup, useMapEvents } from 'react-leaflet'
+import { MapContainer, TileLayer, GeoJSON, Marker, Popup, CircleMarker, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import SurveyorShell from '../../components/SurveyorShell'
 import api from '../../api/client'
@@ -38,14 +38,18 @@ function pointColor(p) {
 export default function LiveMap() {
   const [parcels, setParcels] = useState([])
   const [apps, setApps] = useState([])
+  const [heat, setHeat] = useState([])
+  const [showHeat, setShowHeat] = useState(false)
   const [zoom, setZoom] = useState(13)
   const [zone, setZone] = useState('all')
   const [type, setType] = useState('all')
   const [status, setStatus] = useState('all')
+  const [dispute, setDispute] = useState('all')
 
   useEffect(() => {
     api.get('/analytics/geofeeds/parcels').then(r => setParcels(r.data?.features || [])).catch(() => {})
     api.get('/analytics/geofeeds/applications').then(r => setApps(r.data?.features || [])).catch(() => {})
+    api.get('/analytics/geofeeds/pending-heatmap').then(r => setHeat(r.data?.features || [])).catch(() => {})
   }, [])
 
   const zones = useMemo(() => [...new Set(apps.map(f => f.properties?.zone_id).filter(Boolean))], [apps])
@@ -71,6 +75,12 @@ export default function LiveMap() {
       return { zone: z, count: feats.length, position: [lat, lng] }
     })
   }, [filteredApps])
+
+  const filteredParcels = useMemo(() => parcels.filter(f => {
+    if (dispute === 'all') return true
+    const d = f.properties?.dispute_state || 'none'
+    return dispute === 'disputed' ? d === 'disputed' : d !== 'disputed'
+  }), [parcels, dispute])
 
   function parcelStyle(feature) {
     const disputed = feature.properties?.dispute_state === 'disputed'
@@ -99,6 +109,11 @@ export default function LiveMap() {
         <Select value={zone} onChange={setZone} label="All Zones" options={zones.map(z => ({ value: z, text: z }))} />
         <Select value={type} onChange={setType} label="All Types" options={Object.entries(TYPES).map(([value, text]) => ({ value, text }))} />
         <Select value={status} onChange={setStatus} label="All Statuses" options={Object.entries(STATUS).map(([value, s]) => ({ value, text: s.label }))} />
+        <Select value={dispute} onChange={setDispute} label="All Parcels" options={[{ value: 'disputed', text: 'Disputed only' }, { value: 'clear', text: 'Not disputed' }]} />
+        <label className="flex items-center gap-2 px-3 py-[6px] border border-[#e3e8e5] rounded-[9px] bg-white text-[12.5px] text-[#16201c] cursor-pointer select-none">
+          <input type="checkbox" checked={showHeat} onChange={e => setShowHeat(e.target.checked)} />
+          Pending heatmap ({heat.length})
+        </label>
       </div>
 
       <div className="bg-white border border-[#e3e8e5] rounded-[13px] overflow-hidden" style={{ height: '520px' }}>
@@ -108,9 +123,18 @@ export default function LiveMap() {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution='&copy; OpenStreetMap contributors'
           />
-          {parcels.length > 0 && (
-            <GeoJSON key={`parcels-${parcels.length}`} data={{ type: 'FeatureCollection', features: parcels }} style={parcelStyle} onEachFeature={onEachParcel} />
+          {filteredParcels.length > 0 && (
+            <GeoJSON key={`parcels-${dispute}-${filteredParcels.length}`} data={{ type: 'FeatureCollection', features: filteredParcels }} style={parcelStyle} onEachFeature={onEachParcel} />
           )}
+
+          {showHeat && heat.map((f, i) => (
+            <CircleMarker
+              key={`heat-${i}`}
+              center={[f.geometry.coordinates[1], f.geometry.coordinates[0]]}
+              radius={20}
+              pathOptions={{ color: 'transparent', fillColor: '#dc2626', fillOpacity: 0.22 }}
+            />
+          ))}
 
           {zoom < CLUSTER_ZOOM
             ? clusters.map(c => (

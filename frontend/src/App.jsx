@@ -1,9 +1,9 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Link, Outlet } from 'react-router-dom'
+import Login from './pages/Login'
 import RegisterApplicant from './pages/RegisterApplicant'
 import StaffDashboard from './pages/StaffDashboard'
 import ApplicationManagement from './pages/ApplicationManagement'
-import NewApplication from './pages/NewApplication'
 import ApplicationDetails from './pages/ApplicationDetails'
 import RegistrarReview from './pages/RegistrarReview'
 import CertificateIssuance from './pages/CertificateIssuance'
@@ -32,16 +32,18 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Login / role selection */}
+        <Route path="/"                    element={<Login />} />
+
         {/* Staff console */}
-        <Route path="/"                    element={<StaffDashboard />} />
+        <Route path="/dashboard"           element={<StaffDashboard />} />
         <Route path="/applications"        element={<ApplicationManagement />} />
-        <Route path="/applications/new"    element={<NewApplication />} />
         <Route path="/applications/:id"    element={<ApplicationDetails />} />
         <Route path="/review/:id"          element={<RegistrarReview />} />
         <Route path="/certificates"        element={<CertificateIssuance />} />
         <Route path="/register" element={
           <div className="max-w-3xl mx-auto px-6 py-8">
-            <Link to="/" className="text-sm text-blue-600 hover:underline">← Back to Dashboard</Link>
+            <Link to="/dashboard" className="text-sm text-blue-600 hover:underline">← Back to Dashboard</Link>
             <RegisterApplicant />
           </div>
         } />

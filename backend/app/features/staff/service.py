@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 from bson import ObjectId
 from app.database import staff_col, survey_tasks_col, applications_col, logs_col, survey_reports_col
+from app.features.applications.workflow import ALLOWED_NEXT
+from app.utils.applications import parcel_number_of, parcel_zone_of
 
 
 def _log_event(application_id: str, event_type: str, actor_type: str, actor_id: str, meta: dict) -> None:
@@ -48,9 +50,8 @@ def get_tasks_by_surveyor(staff_id: str) -> list:
     for t in tasks:
         app = applications_col.find_one({"application_id": t["application_id"]})
         if app:
-            parcel_ref = app.get("parcel_ref", {})
-            t["parcel_number"] = parcel_ref.get("parcel_number")
-            t["zone"] = parcel_ref.get("zone_id")
+            t["parcel_number"] = parcel_number_of(app)
+            t["zone"] = parcel_zone_of(app)
             t["priority"] = app.get("priority")
     return tasks
 
@@ -172,7 +173,13 @@ def create_survey_report(application_id: str, data: dict) -> dict | None:
     )
     applications_col.update_one(
         {"application_id": application_id},
-        {"$set": {"status": "surveyed", "timestamps.surveyed_at": now, "timestamps.updated_at": now}},
+        {"$set": {
+            "status": "surveyed",
+            "workflow.current_state": "surveyed",
+            "workflow.allowed_next": ALLOWED_NEXT["surveyed"],
+            "timestamps.surveyed_at": now,
+            "timestamps.updated_at": now,
+        }},
     )
     _log_event(application_id, "report_uploaded", "surveyor", data["uploaded_by"], {"report_title": data["report_title"]})
     return report
@@ -187,10 +194,16 @@ def registrar_review(application_id: str, decision: str, reviewed_by: str, notes
     update: dict = {
         "$set": {
             "status": decision,
+            "workflow.current_state": decision,
+            "workflow.allowed_next": ALLOWED_NEXT.get(decision, []),
             "assignment.assigned_registrar_id": reviewed_by,
             "timestamps.updated_at": now,
         }
     }
+    if decision == "approved":
+        update["$set"]["timestamps.approved_at"] = now
+    if decision == "legal_review":
+        update["$set"]["timestamps.legal_review_at"] = now
 
     if notes:
         update["$push"] = {"internal.notes": notes}
