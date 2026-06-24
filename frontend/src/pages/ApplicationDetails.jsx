@@ -12,6 +12,7 @@ import {
   getApplication, getTimeline, transitionApplication,
   holdApplication, rejectApplication, issueCertificate,
 } from '../api/applications'
+import { listStaff, reassignSurveyor, autoAssignSurveyor } from '../api/staff'
 import { apiError } from '../utils/apiError'
 import { getStaff } from '../context/staffSession'
 
@@ -118,6 +119,9 @@ export default function ApplicationDetails() {
   const [reason, setReason] = useState('')
   const [certName, setCertName] = useState('')
 
+  const [surveyors, setSurveyors] = useState([])
+  const [selectedSurveyor, setSelectedSurveyor] = useState('')
+
   const load = useCallback(() => {
     setLoading(true)
     setError('')
@@ -126,12 +130,19 @@ export default function ApplicationDetails() {
         setApp(a.data)
         setEvents(t.data)
         setTarget((a.data.workflow?.allowed_next || [])[0] || '')
+        setSelectedSurveyor(a.data.assignment?.assigned_surveyor_id || '')
       })
       .catch((e) => setError(apiError(e, 'Could not load this application.')))
       .finally(() => setLoading(false))
   }, [id])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    listStaff('surveyor')
+      .then(res => setSurveyors(res.data || []))
+      .catch(() => setSurveyors([]))
+  }, [])
 
   const run = async (fn, ok, confirmText) => {
     if (confirmText && !window.confirm(confirmText)) return
@@ -166,6 +177,13 @@ export default function ApplicationDetails() {
   const docs = app.required_documents || []
   const notes = app.internal?.notes || []
   const canCertificate = app.status === 'approved'
+
+  const assignedSurveyorId = app.assignment?.assigned_surveyor_id || ''
+  const assignedSurveyor = surveyors.find(s => s.id === assignedSurveyorId)
+  // A survey task exists only once an application has reached survey_required.
+  const SURVEY_STAGES = ['survey_required', 'surveyed', 'legal_review', 'approved', 'certificate_issued', 'closed']
+  const surveyStarted = SURVEY_STAGES.includes(app.status)
+  const canAutoAssign = app.status === 'survey_required' && !assignedSurveyorId
 
   return (
     <AppShell title={app.application_id} subtitle={`${TYPES[app.application_type] || app.application_type} · Submitted ${fmtDateTime(app.submission_date)}`}>
@@ -326,6 +344,64 @@ export default function ApplicationDetails() {
               </Button>
             </div>
           </Card>
+
+          {surveyStarted && (
+            <Card className="p-[20px]">
+              <div className="text-[11.5px] font-semibold tracking-[.07em] uppercase text-[#5e6b65] mb-4">Survey Assignment</div>
+
+              <div className="mb-4">
+                <div className="text-[11px] text-[#9aa8a2] mb-[2px]">Currently assigned surveyor</div>
+                {assignedSurveyorId ? (
+                  <div className="text-[13px] text-[#16201c]">
+                    {assignedSurveyor
+                      ? <>{assignedSurveyor.name} <span className="mono text-[#5e6b65]">({assignedSurveyor.staff_code})</span></>
+                      : <span className="mono">{assignedSurveyorId}</span>}
+                  </div>
+                ) : (
+                  <div className="text-[13px] text-[#9aa8a2]">No surveyor assigned yet.</div>
+                )}
+              </div>
+
+              {canAutoAssign && (
+                <>
+                  <Button
+                    variant="primary" className="w-full justify-center mb-3" disabled={busy}
+                    onClick={() => run(
+                      () => autoAssignSurveyor(app.application_id),
+                      'Surveyor auto-assigned by policy',
+                    )}
+                  >Auto-Assign by Policy</Button>
+                  <div className="text-[11.5px] text-[#9aa8a2] mb-3 text-center">or assign manually below</div>
+                </>
+              )}
+
+              <div className="text-[12px] text-[#5e6b65] mb-1">
+                {assignedSurveyorId ? 'Reassign to' : 'Assign to'}
+              </div>
+              <FormSelect value={selectedSurveyor} onChange={e => setSelectedSurveyor(e.target.value)} className="mb-3">
+                <option value="">Select a surveyor…</option>
+                {surveyors.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.staff_code}) · {s.workload?.active_tasks ?? 0}/{s.workload?.max_tasks ?? 10} tasks
+                  </option>
+                ))}
+              </FormSelect>
+              <Button
+                variant="ghost" className="w-full justify-center"
+                disabled={busy || !selectedSurveyor || selectedSurveyor === assignedSurveyorId || !assignedSurveyorId}
+                onClick={() => run(
+                  () => reassignSurveyor(app.application_id, selectedSurveyor),
+                  'Survey task reassigned',
+                  `Reassign the survey task for ${app.application_id} to the selected surveyor?`,
+                )}
+              >Reassign Surveyor</Button>
+              {!assignedSurveyorId && (
+                <div className="text-[11.5px] text-[#9aa8a2] mt-2">
+                  Manual reassignment is available once a surveyor is assigned. Use auto-assign first.
+                </div>
+              )}
+            </Card>
+          )}
 
           {canCertificate && (
             <Card className="p-[20px]">
