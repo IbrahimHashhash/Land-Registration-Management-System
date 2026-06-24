@@ -23,5 +23,8 @@ export const uploadSurveyReport = (applicationId, data) =>
 export const addFieldNote = (applicationId, data) =>
   api.post(`/applications/${applicationId}/field-note`, data, staffHeaders())
 
+export const getSurveyResults = (applicationId) =>
+  api.get(`/applications/${applicationId}/survey-results`, staffHeaders('registrar'))
+
 export const registrarReview = (applicationId, data) =>
   api.patch(`/applications/${applicationId}/registrar-review`, data, staffHeaders('registrar'))

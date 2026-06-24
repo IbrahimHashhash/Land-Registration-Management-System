@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from bson import ObjectId
 from app.features.staff.schemas import (
     StaffCreate, StaffOut, SurveyTaskOut, ReassignRequest, MilestoneUpdate,
-    SurveyReportCreate, SurveyReportOut, RegistrarReviewRequest, FieldNoteCreate,
+    SurveyReportCreate, SurveyReportOut, SurveyResultsOut, RegistrarReviewRequest, FieldNoteCreate,
 )
 from app.features.staff import service
 from app.features.staff.assignment import find_best_surveyor
@@ -108,6 +108,20 @@ def add_field_note(application_id: str, payload: FieldNoteCreate):
     if not task:
         raise HTTPException(status_code=404, detail="No survey task found for this application")
     return _serialize_task(task)
+
+
+@app_router.get("/{application_id}/survey-results", response_model=SurveyResultsOut)
+def get_survey_results(application_id: str):
+    data = service.get_survey_results(application_id)
+    task = data["task"]
+    reports = []
+    for r in data["reports"]:
+        r["id"] = str(r["_id"])
+        reports.append(r)
+    return {
+        "task": _serialize_task(task) if task else None,
+        "reports": reports,
+    }
 
 
 @app_router.patch("/{application_id}/registrar-review")

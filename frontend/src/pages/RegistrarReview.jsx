@@ -7,12 +7,11 @@ import StatusBadge from '../components/ui/StatusBadge'
 import { TYPES } from '../theme'
 import {
   getApplication,
-  transitionApplication,
   holdApplication,
-  rejectApplication,
   verifyDocument,
 } from '../api/applications'
 import { getApplicationDocuments } from '../api/applicant'
+import { getSurveyResults, registrarReview } from '../api/staff'
 import { apiError } from '../utils/apiError'
 import { getStaff } from '../context/staffSession'
 
@@ -36,6 +35,7 @@ export default function RegistrarReview() {
 
   const [app, setApp] = useState(null)
   const [docs, setDocs] = useState([])
+  const [survey, setSurvey] = useState({ task: null, reports: [] })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [decision, setDecision] = useState('')
@@ -52,11 +52,13 @@ export default function RegistrarReview() {
     Promise.all([
       getApplication(id),
       getApplicationDocuments(id).catch(() => []),
+      getSurveyResults(id).then(r => r.data).catch(() => ({ task: null, reports: [] })),
     ])
-      .then(([appRes, docList]) => {
+      .then(([appRes, docList, surveyData]) => {
         if (!active) return
         setApp(appRes.data)
         setDocs(docList || [])
+        setSurvey(surveyData || { task: null, reports: [] })
         const initial = {}
         ;(docList || []).forEach(d => { initial[d.document_id] = d.verification_status || 'pending_review' })
         setDocStates(initial)
@@ -85,10 +87,10 @@ export default function RegistrarReview() {
     setActionError('')
     try {
       const staff = getStaff()
-      await transitionApplication(id, {
-        to_state: toState,
-        note: decision || undefined,
-        actor_id: staff?.id,
+      await registrarReview(id, {
+        decision: toState,
+        reviewed_by: staff?.id,
+        notes: decision || undefined,
       })
       setReload(r => r + 1)
       if (toState === 'approved') navigate('/certificates')
@@ -126,7 +128,12 @@ export default function RegistrarReview() {
     setActionError('')
     try {
       const staff = getStaff()
-      await rejectApplication(id, { reason: decision.trim(), actor_id: staff?.id })
+      await registrarReview(id, {
+        decision: 'rejected',
+        reviewed_by: staff?.id,
+        notes: decision.trim(),
+        rejection_reason: decision.trim(),
+      })
       setReload(r => r + 1)
     } catch (err) {
       setActionError(apiError(err, 'Could not reject application.'))
@@ -178,6 +185,7 @@ export default function RegistrarReview() {
       </Card>
 
       <div className="grid gap-5" style={{ gridTemplateColumns: '1.55fr 1fr' }}>
+        <div className="flex flex-col gap-5">
         <Card className="p-[22px]">
           <div className="text-[14px] font-bold text-[#16201c] mb-[5px]">Legal Document Review</div>
           <div className="text-[12.5px] text-[#5e6b65] mb-5">
@@ -244,6 +252,71 @@ export default function RegistrarReview() {
             </div>
           )}
         </Card>
+
+        <Card className="p-[22px]">
+          <div className="flex items-center justify-between mb-[5px]">
+            <div className="text-[14px] font-bold text-[#16201c]">Survey Results</div>
+            {survey.task && (
+              <span className="text-[11px] font-semibold px-[10px] py-[3px] rounded-full capitalize"
+                style={{ color: '#1f5f4f', background: '#e7f1ee' }}>
+                {(survey.task.status || '').replace(/_/g, ' ')}
+              </span>
+            )}
+          </div>
+          <div className="text-[12.5px] text-[#5e6b65] mb-5">
+            Field survey findings reported by the surveyor.
+          </div>
+
+          {!survey.task && survey.reports.length === 0 ? (
+            <div className="text-[12.5px] text-[#9aa8a2] py-2">No survey has been carried out for this application.</div>
+          ) : (
+            <div className="space-y-4">
+              {survey.reports.length === 0 ? (
+                <div className="text-[12.5px] text-[#9aa8a2]">Survey in progress — no report uploaded yet.</div>
+              ) : (
+                survey.reports.map(rep => (
+                  <div key={rep.id} className="border border-[#e3e8e5] rounded-[11px] p-[16px]">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-[13.5px] font-semibold text-[#16201c]">{rep.report_title}</div>
+                      {rep.uploaded_at && (
+                        <span className="text-[11.5px] text-[#9aa8a2]">
+                          {new Date(rep.uploaded_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}
+                        </span>
+                      )}
+                    </div>
+                    {rep.findings && (
+                      <p className="text-[13px] text-[#384640] leading-relaxed whitespace-pre-wrap">{rep.findings}</p>
+                    )}
+                    <div className="text-[11.5px] text-[#9aa8a2] mt-2 mono">Uploaded by {rep.uploaded_by}</div>
+                  </div>
+                ))
+              )}
+
+              {survey.task?.field_notes?.length > 0 && (
+                <div>
+                  <div className="text-[12px] font-semibold text-[#5e6b65] uppercase tracking-[.05em] mb-2">Field Notes</div>
+                  <ul className="list-disc pl-5 text-[13px] text-[#384640] space-y-1">
+                    {survey.task.field_notes.map((n, i) => <li key={i}>{n}</li>)}
+                  </ul>
+                </div>
+              )}
+
+              {survey.task?.milestones?.length > 0 && (
+                <div>
+                  <div className="text-[12px] font-semibold text-[#5e6b65] uppercase tracking-[.05em] mb-2">Milestones</div>
+                  <div className="flex gap-2 flex-wrap">
+                    {survey.task.milestones.map((m, i) => (
+                      <span key={i} className="text-[11.5px] px-[10px] py-[3px] rounded-full bg-[#eef1f4] text-[#475569] capitalize">
+                        {(m.type || '').replace(/_/g, ' ')}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
+        </div>
 
         <div className="flex flex-col gap-5">
           <Card className="p-[22px]">

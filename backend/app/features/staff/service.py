@@ -71,6 +71,16 @@ def add_field_note(application_id: str, note: str, by: str) -> dict | None:
     return survey_tasks_col.find_one({"_id": task["_id"]})
 
 
+def get_survey_results(application_id: str) -> dict:
+    """Return the survey task and any uploaded survey reports for an
+    application, so registrar staff can review the survey results."""
+    task = survey_tasks_col.find_one({"application_id": application_id})
+    reports = list(
+        survey_reports_col.find({"application_id": application_id}).sort("uploaded_at", -1)
+    )
+    return {"task": task, "reports": reports}
+
+
 def create_survey_task(application_id: str, surveyor_id: str, parcel_id: str) -> dict:
     # Idempotent: if a task already exists for this application, return it
     # rather than creating a duplicate.

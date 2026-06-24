@@ -35,7 +35,7 @@ function pointColor(p) {
   return STATUS[p.status]?.fg || '#1f5f4f'
 }
 
-export default function LiveMap() {
+export default function LiveMap({ Shell = SurveyorShell }) {
   const [parcels, setParcels] = useState([])
   const [apps, setApps] = useState([])
   const [heat, setHeat] = useState([])
@@ -104,7 +104,7 @@ export default function LiveMap() {
   )
 
   return (
-    <SurveyorShell title="Live Parcel Map" subtitle="Parcels, pending and survey-required applications, disputed parcels">
+    <Shell title="Live Parcel Map" subtitle="Parcels, pending and survey-required applications, disputed parcels">
       <div className="flex flex-wrap gap-2 mb-4">
         <Select value={zone} onChange={setZone} label="All Zones" options={zones.map(z => ({ value: z, text: z }))} />
         <Select value={type} onChange={setType} label="All Types" options={Object.entries(TYPES).map(([value, text]) => ({ value, text }))} />
@@ -162,6 +162,6 @@ export default function LiveMap() {
         </MapContainer>
       </div>
       <p className="text-[11.5px] text-[#8a988f] mt-2">Zoom in past level {CLUSTER_ZOOM} to expand clustered application markers.</p>
-    </SurveyorShell>
+    </Shell>
   )
 }
