@@ -202,6 +202,8 @@ def transition(application_id: str, data: TransitionRequest) -> dict:
 
     current = app.get("status")
     target = data.to_state
+    if target == "certificate_issued":
+        raise HTTPException(status_code=400, detail="A certificate must be issued via the Issue Certificate action, not a manual transition.")
     if target not in ALLOWED_NEXT.get(current, []):
         raise HTTPException(status_code=400, detail=f"Cannot move from {current} to {target}")
     if target == "rejected" and not data.reason:

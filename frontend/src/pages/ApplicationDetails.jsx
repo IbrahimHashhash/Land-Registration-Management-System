@@ -131,7 +131,7 @@ export default function ApplicationDetails() {
         setApp(a.data)
         setEvents(t.data)
         setUploadedDocs(d.data || [])
-        setTarget((a.data.workflow?.allowed_next || [])[0] || '')
+        setTarget((a.data.workflow?.allowed_next || []).filter(s => s !== 'certificate_issued')[0] || '')
         setSelectedSurveyor(a.data.assignment?.assigned_surveyor_id || '')
       })
       .catch((e) => setError(apiError(e, 'Could not load this application.')))
@@ -175,7 +175,7 @@ export default function ApplicationDetails() {
   const parcel = app.parcel || {}
   const parcelCenter = geometryCenter(parcel.geometry)
   const applicant = app.applicant_ref || {}
-  const allowed = app.workflow?.allowed_next || []
+  const allowed = (app.workflow?.allowed_next || []).filter(s => s !== 'certificate_issued')
   const docs = app.required_documents || []
   const notes = app.internal?.notes || []
   const canCertificate = app.status === 'approved'
