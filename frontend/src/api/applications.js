@@ -6,6 +6,8 @@ export const getApplication = (id) => api.get(`/applications/${id}`)
 
 export const getTimeline = (id) => api.get(`/applications/${id}/timeline`)
 
+export const listDocuments = (id) => api.get(`/applications/${id}/documents`)
+
 export const createApplication = (data, idempotencyKey) =>
   api.post('/applications/', data, idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : undefined)
 
