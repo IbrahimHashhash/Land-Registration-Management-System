@@ -122,7 +122,9 @@ def get_application(application_id: str) -> dict:
     return _public(doc)
 
 
-def list_applications(status, application_type, zone_id, search, sort_by, order, page, page_size) -> dict:
+def list_applications(status, application_type, zone_id, search,
+                     submitted_from=None, submitted_to=None,
+                     sort_by=None, order="desc", page=1, page_size=10) -> dict:
     query: dict = {}
     if status and status not in ("", ALL_STATUSES):
         query["status"] = status
@@ -137,6 +139,19 @@ def list_applications(status, application_type, zone_id, search, sort_by, order,
             {"applicant_ref.applicant_id": rx},
             {"parcel.parcel_no": rx},
         ]
+    date_q: dict = {}
+    if submitted_from:
+        try:
+            date_q["$gte"] = datetime.fromisoformat(submitted_from.replace("Z", "+00:00"))
+        except ValueError:
+            pass
+    if submitted_to:
+        try:
+            date_q["$lte"] = datetime.fromisoformat(submitted_to.replace("Z", "+00:00"))
+        except ValueError:
+            pass
+    if date_q:
+        query["submission_date"] = date_q
 
     total = applications_col.count_documents(query)
     direction = -1 if str(order).lower() == "desc" else 1
@@ -201,6 +216,8 @@ def transition(application_id: str, data: TransitionRequest) -> dict:
         "workflow.allowed_next": ALLOWED_NEXT[target],
         "timestamps.updated_at": now,
     }}
+    if data.actor_id and data.actor_id != "staff":
+        update["$set"]["assignment.assigned_registrar_id"] = data.actor_id
     if target in TIMESTAMP_FIELD:
         update["$set"][f"timestamps.{TIMESTAMP_FIELD[target]}"] = now
     if target == "rejected":
@@ -217,6 +234,24 @@ def transition(application_id: str, data: TransitionRequest) -> dict:
     else:
         notify_status_change(applicant_id, application_id, target)
 
+    # Spec Annex B step 4: when an application enters `survey_required`, the
+    # system selects a suitable surveyor. Best-effort: if no surveyor matches,
+    # leave the app in survey_required and let staff assign manually.
+    if target == "survey_required":
+        try:
+            from app.features.staff.assignment import find_best_surveyor
+            from app.features.staff import service as staff_service
+            from app.utils.applications import parcel_zone_of, parcel_of
+            updated = applications_col.find_one({"application_id": application_id})
+            zone = parcel_zone_of(updated)
+            surveyor = find_best_surveyor(zone, updated.get("application_type", ""), updated.get("priority", "normal"))
+            if surveyor:
+                parcel_id = parcel_of(updated).get("parcel_id")
+                staff_service.create_survey_task(application_id, str(surveyor["_id"]), str(parcel_id) if parcel_id else None)
+        except Exception:
+            # auto-assign is best-effort; manual /auto-assign-surveyor remains available
+            pass
+
     return _public(applications_col.find_one({"application_id": application_id}))
 
 
@@ -230,16 +265,19 @@ def hold(application_id: str, data: HoldRequest) -> dict:
         raise HTTPException(status_code=400, detail="Application can no longer be placed on hold")
 
     now = _now()
+    set_fields = {
+        "status": "on_hold",
+        "previous_state": app.get("status"),
+        "hold_reason": data.reason,
+        "workflow.current_state": "on_hold",
+        "workflow.allowed_next": ALLOWED_NEXT["on_hold"],
+        "timestamps.updated_at": now,
+    }
+    if data.actor_id and data.actor_id != "staff":
+        set_fields["assignment.assigned_registrar_id"] = data.actor_id
     applications_col.update_one(
         {"application_id": application_id},
-        {"$set": {
-            "status": "on_hold",
-            "previous_state": app.get("status"),
-            "hold_reason": data.reason,
-            "workflow.current_state": "on_hold",
-            "workflow.allowed_next": ALLOWED_NEXT["on_hold"],
-            "timestamps.updated_at": now,
-        }},
+        {"$set": set_fields},
     )
     _log_event(application_id, "on_hold", "staff", data.actor_id, {"reason": data.reason})
     return _public(applications_col.find_one({"application_id": application_id}))
@@ -255,15 +293,18 @@ def reject(application_id: str, data: RejectRequest) -> dict:
         raise HTTPException(status_code=400, detail="Application can no longer be rejected")
 
     now = _now()
+    set_fields = {
+        "status": "rejected",
+        "rejection_reason": data.reason,
+        "workflow.current_state": "rejected",
+        "workflow.allowed_next": ALLOWED_NEXT["rejected"],
+        "timestamps.updated_at": now,
+    }
+    if data.actor_id and data.actor_id != "staff":
+        set_fields["assignment.assigned_registrar_id"] = data.actor_id
     applications_col.update_one(
         {"application_id": application_id},
-        {"$set": {
-            "status": "rejected",
-            "rejection_reason": data.reason,
-            "workflow.current_state": "rejected",
-            "workflow.allowed_next": ALLOWED_NEXT["rejected"],
-            "timestamps.updated_at": now,
-        }},
+        {"$set": set_fields},
     )
     _log_event(application_id, "rejected", "registrar", data.actor_id, {"reason": data.reason})
     return _public(applications_col.find_one({"application_id": application_id}))
@@ -311,5 +352,20 @@ def issue_certificate(application_id: str, data: CertificateRequest) -> dict:
 
     applicant_id = (app.get("applicant_ref") or {}).get("applicant_id")
     notify_certificate_ready(applicant_id, application_id, certificate_id)
+
+    # Spec Annex B step 10: after the certificate is issued and all records are
+    # updated, the application is closed. Auto-transition to `closed`.
+    applications_col.update_one(
+        {"application_id": application_id},
+        {"$set": {
+            "status": "closed",
+            "workflow.current_state": "closed",
+            "workflow.allowed_next": ALLOWED_NEXT["closed"],
+            "timestamps.closed_at": now,
+            "timestamps.updated_at": now,
+        }},
+    )
+    _log_event(application_id, "closed", "system", "auto_close",
+               {"reason": "certificate issued"})
 
     return _public(cert)

@@ -54,6 +54,8 @@ export default function ApplicationManagement() {
   const [statusFilter, setStatusFilter] = useState('All Statuses')
   const [typeFilter, setTypeFilter] = useState('All Types')
   const [zoneFilter, setZoneFilter] = useState('All Zones')
+  const [submittedFrom, setSubmittedFrom] = useState('')
+  const [submittedTo, setSubmittedTo] = useState('')
   const [page, setPage] = useState(1)
 
   const [items, setItems] = useState([])
@@ -65,7 +67,7 @@ export default function ApplicationManagement() {
   const [stats, setStats] = useState(null)
   const navigate = useNavigate()
 
-  useEffect(() => { setPage(1) }, [search, statusFilter, typeFilter, zoneFilter])
+  useEffect(() => { setPage(1) }, [search, statusFilter, typeFilter, zoneFilter, submittedFrom, submittedTo])
 
   useEffect(() => {
     let active = true
@@ -100,6 +102,8 @@ export default function ApplicationManagement() {
       page, page_size: PAGE_SIZE,
       status: statusFilter, application_type: typeFilter, zone_id: zoneFilter,
       search: search || undefined,
+      submitted_from: submittedFrom || undefined,
+      submitted_to: submittedTo || undefined,
     }
     listApplications(params)
       .then(res => {
@@ -111,7 +115,7 @@ export default function ApplicationManagement() {
       .catch((e) => active && setError(apiError(e, 'Could not load applications.')))
       .finally(() => active && setLoading(false))
     return () => { active = false }
-  }, [search, statusFilter, typeFilter, zoneFilter, page, reloadKey])
+  }, [search, statusFilter, typeFilter, zoneFilter, submittedFrom, submittedTo, page, reloadKey])
 
   const firstItem = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
   const lastItem = Math.min(page * PAGE_SIZE, total)
@@ -151,6 +155,31 @@ export default function ApplicationManagement() {
         <select className={SELECT_CLS} value={zoneFilter} onChange={e => setZoneFilter(e.target.value)}>
           {ZONES.map(z => <option key={z} value={z}>{z}</option>)}
         </select>
+
+        <input
+          type="date"
+          value={submittedFrom}
+          onChange={e => setSubmittedFrom(e.target.value)}
+          className={SELECT_CLS}
+          title="Submitted from"
+        />
+        <input
+          type="date"
+          value={submittedTo}
+          onChange={e => setSubmittedTo(e.target.value)}
+          className={SELECT_CLS}
+          title="Submitted to"
+        />
+        {(submittedFrom || submittedTo) && (
+          <button
+            type="button"
+            onClick={() => { setSubmittedFrom(''); setSubmittedTo('') }}
+            className="text-[12px] text-[#5e6b65] underline cursor-pointer bg-transparent border-none"
+            style={{ fontFamily: 'inherit' }}
+          >
+            clear dates
+          </button>
+        )}
       </div>
 
       <Card className="overflow-hidden">

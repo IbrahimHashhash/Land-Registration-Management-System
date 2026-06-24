@@ -62,7 +62,35 @@ def get_applicant(applicant_id: str) -> dict:
     doc = applicants_col.find_one({"applicant_id": applicant_id})
     if not doc:
         raise HTTPException(status_code=404, detail="Applicant not found")
+    # Recompute stats + linked_applications from the applications collection so
+    # they are always accurate without denormalization on every transition.
+    apps = list(applications_col.find(
+        {"applicant_ref.applicant_id": applicant_id},
+        {"application_id": 1, "status": 1, "_id": 0},
+    ))
+    done = {"approved", "certificate_issued", "closed"}
+    pending = {"submitted", "pre_checked", "survey_required", "surveyed",
+               "legal_review", "missing_documents", "on_hold", "under_objection"}
+    doc["stats"] = {
+        "total_applications": len(apps),
+        "approved_applications": sum(1 for a in apps if a.get("status") in done),
+        "pending_applications": sum(1 for a in apps if a.get("status") in pending),
+    }
+    doc["linked_applications"] = [a["application_id"] for a in apps]
     return doc
+
+
+def update_verification_state(applicant_id: str, new_state: str) -> dict:
+    if new_state not in ("unverified", "verified", "suspended"):
+        raise HTTPException(status_code=400, detail="Invalid verification state")
+    update = {"verification_state": new_state}
+    if new_state == "verified":
+        update["identity.verified"] = True
+        update["identity.verified_at"] = datetime.now(timezone.utc)
+    result = applicants_col.update_one({"applicant_id": applicant_id}, {"$set": update})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Applicant not found")
+    return get_applicant(applicant_id)
 
 
 def upload_document(application_id: str, data: DocumentUpload) -> dict:
@@ -165,7 +193,6 @@ def get_timeline(application_id: str) -> list:
     return sorted(events, key=lambda e: e["at"])
 
 def get_applications_for_applicant(applicant_id: str) -> list:
-    # TODO: confirm field name with zaid — assuming applicant_ref.applicant_id
     result = applications_col.find({"applicant_ref.applicant_id": applicant_id}).sort("submission_date", -1)
     return list(result)
 

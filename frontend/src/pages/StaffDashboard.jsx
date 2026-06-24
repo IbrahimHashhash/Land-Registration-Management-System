@@ -47,8 +47,8 @@ export default function StaffDashboard() {
 
   const KPI_CARDS = kpis ? [
     { label: 'Total Pending',     value: kpis.pending,            sub: 'in progress',           accent: '#1f5f4f' },
-    { label: 'Approved',          value: kpis.approved,           sub: 'completed',             accent: '#1f7a4d' },
-    { label: 'Certificates Issued', value: kpis.certificate_issued, sub: 'issued to applicants', accent: '#0e7490' },
+    { label: 'Legal Review',      value: byStatus?.legal_review || 0,      sub: 'awaiting registrar',    accent: '#6d28d9' },
+    { label: 'Missing Documents', value: byStatus?.missing_documents || 0, sub: 'needs applicant action', accent: '#b45309' },
     { label: 'Under Objection',   value: kpis.under_objection,    sub: 'disputes',              accent: '#be123c' },
   ] : []
 

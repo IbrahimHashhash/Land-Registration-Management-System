@@ -19,12 +19,18 @@ def list_applications(
     application_type: Optional[str] = None,
     zone_id: Optional[str] = None,
     search: Optional[str] = None,
+    submitted_from: Optional[str] = None,
+    submitted_to: Optional[str] = None,
     sort_by: str = "submission_date",
     order: str = "desc",
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
 ):
-    return service.list_applications(status, application_type, zone_id, search, sort_by, order, page, page_size)
+    return service.list_applications(
+        status, application_type, zone_id, search,
+        submitted_from, submitted_to,
+        sort_by, order, page, page_size,
+    )
 
 
 @router.get("/{application_id}")

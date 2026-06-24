@@ -123,6 +123,23 @@ def test_applicant_module():
     r = client.get(f"/applicants/{applicant_id}/objections")
     check("list applicant objections empty (200)", r.status_code == 200 and r.json() == [])
 
+    # Verification state endpoint requires staff role and accepts valid values
+    r = client.patch(f"/applicants/{applicant_id}/verification-state",
+                     json={"verification_state": "verified"})
+    check("verification-state without staff role blocked (403)", r.status_code == 403)
+
+    r = client.patch(f"/applicants/{applicant_id}/verification-state",
+                     json={"verification_state": "verified"}, headers=REGISTRAR_HDR)
+    check("verification-state -> verified (200)", r.status_code == 200 and r.json()["verification_state"] == "verified")
+
+    r = client.patch(f"/applicants/{applicant_id}/verification-state",
+                     json={"verification_state": "suspended"}, headers=REGISTRAR_HDR)
+    check("verification-state -> suspended (200)", r.status_code == 200 and r.json()["verification_state"] == "suspended")
+
+    # Reset back to verified for downstream tests
+    client.patch(f"/applicants/{applicant_id}/verification-state",
+                 json={"verification_state": "verified"}, headers=REGISTRAR_HDR)
+
 
 # ============================================================================
 # MODULE 1 — Land Applications + workflow rules
@@ -166,9 +183,20 @@ def test_application_module():
     r = client.get("/applications/", params={"zone_id": "ZONE-TEST-99", "page": 1, "page_size": 50})
     check("list filtered by zone (200)", r.status_code == 200 and any(a["application_id"] == application_id for a in r.json()["items"]))
 
+    # Date filter (submitted_from / submitted_to)
+    r = client.get("/applications/", params={"submitted_from": "2030-01-01"})
+    check("submitted_from future returns empty", r.status_code == 200 and not any(a["application_id"] == application_id for a in r.json()["items"]))
+    r = client.get("/applications/", params={"submitted_from": "2020-01-01", "submitted_to": "2099-01-01", "page_size": 100})
+    check("submitted_from/to wide window includes app", r.status_code == 200 and any(a["application_id"] == application_id for a in r.json()["items"]))
+
     # Now visible in applicant's applications list
     r = client.get(f"/applicants/{applicant_id}/applications")
     check("applicant's applications now lists it", r.status_code == 200 and len(r.json()) == 1)
+
+    # Stats + linked_applications populate dynamically from get_applicant
+    r = client.get(f"/applicants/{applicant_id}")
+    check("applicant.stats.total_applications updates", r.json().get("stats", {}).get("total_applications") == 1)
+    check("applicant.linked_applications populated", application_id in r.json().get("linked_applications", []))
 
     # ---- Workflow rule enforcement ----
     print("  workflow rules:")
@@ -367,8 +395,10 @@ def test_staff_module():
     client.post(f"/applications/{test_app_id_2}/documents", json={
         "document_type": "ownership_deed", "file_name": "deed888.pdf", "file_path": "/uploads/deed888.pdf",
     })
-    r = client.patch(f"/applications/{test_app_id_2}/transition", json={"to_state": "legal_review"})
+    r = client.patch(f"/applications/{test_app_id_2}/transition", json={"to_state": "legal_review", "actor_id": registrar_id})
     check("transition surveyed -> legal_review with doc (200)", r.status_code == 200)
+    check("transition with actor_id records assigned_registrar_id",
+          (r.json().get("assignment") or {}).get("assigned_registrar_id") == registrar_id)
 
     # Now registrar-review can approve
     r = client.patch(f"/applications/{test_app_id_2}/registrar-review",
@@ -382,7 +412,8 @@ def test_staff_module():
     cert_id = r.json()["certificate_id"]
 
     r = client.get(f"/applications/{test_app_id_2}")
-    check("application status -> certificate_issued", r.json()["status"] == "certificate_issued")
+    check("application auto-closes after certificate (Annex B step 10)", r.json()["status"] == "closed")
+    check("application records certificate_ref", r.json().get("certificate_ref") == cert_id)
 
     r = client.get("/certificates/")
     check("certificate appears in list", any(c["certificate_id"] == cert_id for c in r.json()))
@@ -390,6 +421,19 @@ def test_staff_module():
     # Surveyor's tasks list
     r = client.get(f"/staff/{surveyor_id}/tasks", headers=SURVEYOR_HDR)
     check("surveyor tasks lists assignment", r.status_code == 200 and any(t["application_id"] == test_app_id_2 for t in r.json()))
+
+    # Transition with actor_id records the registrar on the application,
+    # so registrar workload analytics has data.
+    app_doc = applications_col.find_one({"application_id": test_app_id_2})
+    check("transition records assigned_registrar_id", (app_doc.get("assignment", {}).get("assigned_registrar_id")) == registrar_id)
+
+    # Re-uploading a survey report after the app has moved past `surveyed`
+    # must NOT regress the workflow state. (App is now closed.)
+    r = client.post(f"/applications/{test_app_id_2}/survey-report",
+                    json={"report_title": "Resubmit", "findings": "Updated", "uploaded_by": surveyor_id}, headers=SURVEYOR_HDR)
+    check("duplicate survey report still 201", r.status_code == 201)
+    r = client.get(f"/applications/{test_app_id_2}")
+    check("duplicate report does NOT regress workflow", r.json()["status"] == "closed")
 
 
 # ============================================================================
@@ -464,6 +508,93 @@ def test_analytics_module():
     check("CSV header has expected columns", "application_id,application_type,status" in r.text.split("\n")[0])
 
 
+# ============================================================================
+# ANNEX B - End-to-end happy path
+# 11 numbered steps from the spec, exercised in order.
+# ============================================================================
+def test_annex_b_happy_path():
+    print("\n--- Annex B: end-to-end workflow ---")
+
+    # Step 1: Application Submission
+    payload = {
+        "application_type": "first_registration",
+        "priority": "normal",
+        "applicant_ref": {"applicant_id": applicant_id, "applicant_type": "citizen"},
+        "parcel": {
+            "parcel_no": "777", "block_no": "77", "basin_no": "7", "zone_id": "ZONE-TEST-99",
+            "geometry": {"type": "Polygon", "coordinates": [[[35.20, 31.90], [35.21, 31.90], [35.21, 31.91], [35.20, 31.91], [35.20, 31.90]]]},
+        },
+    }
+    r = client.post("/applications/", json=payload)
+    check("step 1: create application -> submitted", r.status_code == 201 and r.json()["status"] == "submitted")
+    aid = r.json()["application_id"]
+
+    # Step 2: Automatic validation - log records the submitted event
+    r = client.get(f"/applications/{aid}/timeline")
+    check("step 2: timeline records submitted event", any(e["type"] == "submitted" for e in r.json()))
+
+    # Step 3: Pre-Check by Staff
+    r = client.patch(f"/applications/{aid}/transition", json={"to_state": "pre_checked", "actor_id": registrar_id})
+    check("step 3: pre_checked", r.status_code == 200 and r.json()["status"] == "pre_checked")
+
+    # Step 4: Survey Requirement - auto-assign should happen on transition
+    r = client.patch(f"/applications/{aid}/transition", json={"to_state": "survey_required", "actor_id": registrar_id})
+    check("step 4a: survey_required", r.status_code == 200 and r.json()["status"] == "survey_required")
+    check("step 4b: auto-assignment populated assigned_surveyor_id",
+          r.json().get("assignment", {}).get("assigned_surveyor_id") == surveyor_id)
+    r = client.get(f"/staff/{surveyor_id}/tasks", headers=SURVEYOR_HDR)
+    check("step 4c: survey task created for the app", any(t["application_id"] == aid for t in r.json()))
+
+    # Step 5: Field Survey - milestones + report
+    for m in ["visit_scheduled", "arrived_on_site", "survey_started", "survey_completed"]:
+        client.patch(f"/applications/{aid}/survey-milestone",
+                     json={"type": m, "by": surveyor_id, "meta": {}}, headers=SURVEYOR_HDR)
+    r = client.post(f"/applications/{aid}/survey-report",
+                    json={"report_title": "FR 777", "findings": "OK", "uploaded_by": surveyor_id}, headers=SURVEYOR_HDR)
+    check("step 5: survey report uploaded", r.status_code == 201)
+    r = client.get(f"/applications/{aid}")
+    check("step 5: app reaches surveyed", r.json()["status"] == "surveyed")
+
+    # Step 6: Legal Review (requires uploaded doc)
+    client.post(f"/applications/{aid}/documents",
+                json={"document_type": "ownership_deed", "file_name": "deed777.pdf", "file_path": "/uploads/deed777.pdf"})
+    r = client.patch(f"/applications/{aid}/transition",
+                     json={"to_state": "legal_review", "actor_id": registrar_id})
+    check("step 6: legal_review", r.status_code == 200 and r.json()["status"] == "legal_review")
+
+    # Step 7: Objection handling — file an objection then resolve back to legal_review
+    r = client.post(f"/applications/{aid}/objections",
+                    json={"author_id": applicant_id, "reason": "Boundary dispute", "supporting_documents": []})
+    check("step 7a: objection submitted", r.status_code == 201)
+    r = client.get(f"/applications/{aid}")
+    check("step 7b: app moves to under_objection", r.json()["status"] == "under_objection")
+    r = client.patch(f"/applications/{aid}/transition",
+                     json={"to_state": "legal_review", "actor_id": registrar_id, "note": "Objection resolved"})
+    check("step 7c: registrar resolves -> legal_review", r.status_code == 200)
+
+    # Step 8: Approval
+    r = client.patch(f"/applications/{aid}/transition",
+                     json={"to_state": "approved", "actor_id": registrar_id})
+    check("step 8: approved", r.status_code == 200 and r.json()["status"] == "approved")
+
+    # Step 9 + 10: Certificate Issuance auto-closes the application
+    r = client.post(f"/applications/{aid}/certificate",
+                    json={"certificate_type": "ownership_certificate", "full_name": "Test Applicant", "issued_by": registrar_id})
+    check("step 9: certificate issued (201)", r.status_code == 201)
+    cert_id = r.json()["certificate_id"]
+    r = client.get(f"/applications/{aid}")
+    check("step 10: app auto-closes after certificate", r.json()["status"] == "closed")
+    check("step 10: certificate_ref recorded", r.json().get("certificate_ref") == cert_id)
+    check("step 10: timestamps.closed_at set", (r.json().get("timestamps") or {}).get("closed_at") is not None)
+
+    # Step 11: Mapping & Analytics — closed app contributes to analytics
+    r = client.get("/analytics/applications-by-status")
+    check("step 11: closed counted in analytics", r.json().get("closed", 0) >= 1)
+    r = client.get("/analytics/geofeeds/applications")
+    apps_feed = r.json().get("features", [])
+    check("step 11: app appears in geofeed", any(f["properties"]["application_id"] == aid for f in apps_feed))
+
+
 if __name__ == "__main__":
     cleanup()
     seed_parcel()
@@ -473,6 +604,7 @@ if __name__ == "__main__":
         test_documents_comments_objections()
         test_staff_module()
         test_analytics_module()
+        test_annex_b_happy_path()
     finally:
         passed = sum(1 for _, c in results if c)
         print(f"\n{passed}/{len(results)} checks passed")

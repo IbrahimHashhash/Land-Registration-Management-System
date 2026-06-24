@@ -8,6 +8,7 @@ import {
   getApplicationDocuments,
   addComment,
 } from '../../api/applicant'
+import { getApplication } from '../../api/applications'
 import { STATUS, TYPES } from '../../theme'
 
 const TYPE_LABELS = {
@@ -73,6 +74,7 @@ export default function TrackApplication() {
 
   const [apps, setApps] = useState([])
   const [appsLoading, setAppsLoading] = useState(true)
+  const [fullApp, setFullApp] = useState(null)
   const [timeline, setTimeline] = useState([])
   const [docs, setDocs] = useState([])
   const [timelineLoading, setTimelineLoading] = useState(false)
@@ -112,9 +114,10 @@ export default function TrackApplication() {
   }
 
   useEffect(() => {
-    if (!app?.application_id) { setTimeline([]); setDocs([]); return }
+    if (!app?.application_id) { setTimeline([]); setDocs([]); setFullApp(null); return }
     refreshTimeline()
     refreshDocs()
+    getApplication(app.application_id).then(r => setFullApp(r.data)).catch(() => setFullApp(null))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [app?.application_id])
 
@@ -336,6 +339,68 @@ export default function TrackApplication() {
               ))}
             </div>
           </div>
+
+          {/* Survey status — derived from current workflow state */}
+          <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
+            <div className="text-[14.5px] font-bold mb-[14px]">Survey Status</div>
+            {(() => {
+              const s = app.status
+              const bucket =
+                s === 'survey_required' ? { label: 'Awaiting assignment', color: '#b45309', desc: 'A surveyor will be assigned soon.' }
+                : s === 'surveyed'      ? { label: 'Survey completed',     color: '#1f7a4d', desc: 'Field survey is done; report uploaded.' }
+                : ['legal_review', 'approved', 'certificate_issued', 'closed'].includes(s)
+                                          ? { label: 'Survey completed',   color: '#1f7a4d', desc: 'Survey phase finished.' }
+                : { label: 'Not yet required', color: '#5e6b65', desc: 'Survey will be scheduled if needed.' }
+              return (
+                <div className="flex items-center gap-[11px] p-[14px] bg-[#f7f9f8] rounded-[10px]">
+                  <div className="w-[40px] h-[40px] rounded-[9px] flex items-center justify-center shrink-0"
+                    style={{ background: bucket.color + '22', color: bucket.color }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="text-[13px] font-semibold" style={{ color: bucket.color }}>{bucket.label}</div>
+                    <div className="text-[11.5px] text-[#5e6b65] mt-0.5 leading-snug">{bucket.desc}</div>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+
+          {/* Missing documents — required_documents minus what's been verified */}
+          {fullApp?.required_documents?.length > 0 && (
+            <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
+              <div className="text-[14.5px] font-bold mb-[14px]">Missing Documents</div>
+              {(() => {
+                const missing = fullApp.required_documents.filter(d => d.status !== 'verified')
+                if (missing.length === 0) {
+                  return <div className="text-[12.5px] text-[#1f7a4d]">All required documents verified.</div>
+                }
+                return missing.map((d, i) => (
+                  <div key={i} className="flex items-center justify-between py-[8px] border-b border-[#f2f4f3] last:border-b-0 text-[12.5px]">
+                    <span className="text-[#384640] capitalize">{d.document_type?.replace(/_/g, ' ')}</span>
+                    <span className="text-[11px] font-semibold px-[9px] py-[2px] rounded-full"
+                      style={{ color: '#b45309', background: '#fbeedd' }}>
+                      {(d.status || 'missing').replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                ))
+              })()}
+            </div>
+          )}
+
+          {/* Registrar notes — internal notes attached during transitions */}
+          {fullApp?.internal?.notes?.length > 0 && (
+            <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
+              <div className="text-[14.5px] font-bold mb-[14px]">Registrar Notes</div>
+              {fullApp.internal.notes.map((n, i) => (
+                <div key={i} className="text-[12.5px] text-[#384640] bg-[#f7f9f8] border border-[#eef1ef] rounded-[8px] px-[11px] py-[8px] mb-[8px] last:mb-0 leading-relaxed">
+                  {n}
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="flex flex-col gap-[9px]">
             <button

@@ -63,6 +63,10 @@ class ApplicantInternal(ApplicantPublic):
     profile_public: bool
 
 
+class VerificationStateUpdate(BaseModel):
+    verification_state: Literal["unverified", "verified", "suspended"]
+
+
 
 class DocumentUpload(BaseModel):
     document_type: Literal["ownership_deed", "id_copy", "sale_contract", "survey_report", "power_of_attorney", "other"]

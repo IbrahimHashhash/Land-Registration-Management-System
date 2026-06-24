@@ -72,6 +72,12 @@ def add_field_note(application_id: str, note: str, by: str) -> dict | None:
 
 
 def create_survey_task(application_id: str, surveyor_id: str, parcel_id: str) -> dict:
+    # Idempotent: if a task already exists for this application, return it
+    # rather than creating a duplicate.
+    existing = survey_tasks_col.find_one({"application_id": application_id})
+    if existing:
+        return existing
+
     count = survey_tasks_col.count_documents({})
     task_id = f"SURV-2026-{count + 1:04d}"
 
@@ -178,16 +184,21 @@ def create_survey_report(application_id: str, data: dict) -> dict | None:
             "$push": {"milestones": {"type": "report_uploaded", "at": now, "by": data["uploaded_by"], "meta": {}}},
         },
     )
-    applications_col.update_one(
-        {"application_id": application_id},
-        {"$set": {
-            "status": "surveyed",
-            "workflow.current_state": "surveyed",
-            "workflow.allowed_next": ALLOWED_NEXT["surveyed"],
-            "timestamps.surveyed_at": now,
-            "timestamps.updated_at": now,
-        }},
-    )
+    # Only auto-advance the application to `surveyed` if it's still in
+    # `survey_required`. Uploading another report after legal_review etc.
+    # must not downgrade the workflow state.
+    app_doc = applications_col.find_one({"application_id": application_id}, {"status": 1})
+    if app_doc and app_doc.get("status") == "survey_required":
+        applications_col.update_one(
+            {"application_id": application_id},
+            {"$set": {
+                "status": "surveyed",
+                "workflow.current_state": "surveyed",
+                "workflow.allowed_next": ALLOWED_NEXT["surveyed"],
+                "timestamps.surveyed_at": now,
+                "timestamps.updated_at": now,
+            }},
+        )
     _log_event(application_id, "report_uploaded", "surveyor", data["uploaded_by"], {"report_title": data["report_title"]})
     return report
 

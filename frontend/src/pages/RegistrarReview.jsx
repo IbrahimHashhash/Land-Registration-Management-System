@@ -14,6 +14,7 @@ import {
 } from '../api/applications'
 import { getApplicationDocuments } from '../api/applicant'
 import { apiError } from '../utils/apiError'
+import { getStaff } from '../context/staffSession'
 
 const DOC_STATUS = {
   verified:        { label: 'Verified',       fg: '#1f7a4d', bg: '#e2f3e9' },
@@ -83,7 +84,12 @@ export default function RegistrarReview() {
     setActionLoading(toState)
     setActionError('')
     try {
-      await transitionApplication(id, { to_state: toState, note: decision || undefined })
+      const staff = getStaff()
+      await transitionApplication(id, {
+        to_state: toState,
+        note: decision || undefined,
+        actor_id: staff?.id,
+      })
       setReload(r => r + 1)
       if (toState === 'approved') navigate('/certificates')
     } catch (err) {
@@ -101,7 +107,8 @@ export default function RegistrarReview() {
     setActionLoading('hold')
     setActionError('')
     try {
-      await holdApplication(id, { reason: decision.trim() })
+      const staff = getStaff()
+      await holdApplication(id, { reason: decision.trim(), actor_id: staff?.id })
       setReload(r => r + 1)
     } catch (err) {
       setActionError(apiError(err, 'Could not put on hold.'))
@@ -118,7 +125,8 @@ export default function RegistrarReview() {
     setActionLoading('reject')
     setActionError('')
     try {
-      await rejectApplication(id, { reason: decision.trim() })
+      const staff = getStaff()
+      await rejectApplication(id, { reason: decision.trim(), actor_id: staff?.id })
       setReload(r => r + 1)
     } catch (err) {
       setActionError(apiError(err, 'Could not reject application.'))

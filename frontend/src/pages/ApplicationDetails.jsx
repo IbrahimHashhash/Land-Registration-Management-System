@@ -13,6 +13,7 @@ import {
   holdApplication, rejectApplication, issueCertificate,
 } from '../api/applications'
 import { apiError } from '../utils/apiError'
+import { getStaff } from '../context/staffSession'
 
 const PRIORITY_STYLE = {
   high:   { color: '#b91c1c', background: '#fbe6e6' },
@@ -297,7 +298,7 @@ export default function ApplicationDetails() {
                 <Button
                   variant="primary" className="w-full justify-center mb-2" disabled={busy}
                   onClick={() => run(
-                    () => transitionApplication(app.application_id, { to_state: target, note: note || undefined, reason: reason || undefined }),
+                    () => transitionApplication(app.application_id, { to_state: target, note: note || undefined, reason: reason || undefined, actor_id: getStaff()?.id }),
                     `Moved to ${labelize(target)}`,
                   )}
                 >Apply Transition</Button>
@@ -315,11 +316,11 @@ export default function ApplicationDetails() {
             />
             <div className="flex gap-2">
               <Button variant="warning" size="sm" className="flex-1 justify-center" disabled={busy}
-                onClick={() => run(() => holdApplication(app.application_id, { reason }), 'Application placed on hold')}>
+                onClick={() => run(() => holdApplication(app.application_id, { reason, actor_id: getStaff()?.id }), 'Application placed on hold')}>
                 Hold
               </Button>
               <Button variant="danger" size="sm" className="flex-1 justify-center" disabled={busy}
-                onClick={() => run(() => rejectApplication(app.application_id, { reason }), 'Application rejected',
+                onClick={() => run(() => rejectApplication(app.application_id, { reason, actor_id: getStaff()?.id }), 'Application rejected',
                   `Reject ${app.application_id}? This cannot be undone.`)}>
                 Reject
               </Button>
