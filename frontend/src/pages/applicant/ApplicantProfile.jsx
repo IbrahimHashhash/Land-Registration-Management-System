@@ -2,7 +2,11 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ApplicantShell from '../../components/ApplicantShell'
 import { useApplicant } from '../../context/ApplicantContext'
-import { getApplicant } from '../../api/applicant'
+import { getApplicant, getApplicantApplications } from '../../api/applicant'
+import { STATUS } from '../../theme'
+
+// Counts toward "approved/completed" rather than "pending"
+const DONE_STATUSES = new Set(['approved', 'certificate_issued', 'closed'])
 
 const APPLICANT_TYPE_LABELS = {
   citizen: 'Citizen',
@@ -29,6 +33,7 @@ export default function ApplicantProfile() {
   const navigate = useNavigate()
 
   const [profile, setProfile] = useState(null)
+  const [apps, setApps]       = useState([])
   const [error, setError]     = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -40,11 +45,22 @@ export default function ApplicantProfile() {
     }
     setLoading(true)
     setError(null)
+    // Applications + stats come from land_applications (source of truth), not the
+    // applicant doc's linked_applications/stats — those are denormalized and never updated.
+    getApplicantApplications(user.applicant_id)
+      .then(list => setApps(Array.isArray(list) ? list : []))
+      .catch(() => setApps([]))
     getApplicant(user.applicant_id)
       .then(setProfile)
       .catch(err => setError(err.response?.data?.detail || 'Could not load your profile.'))
       .finally(() => setLoading(false))
   }, [user?.applicant_id])
+
+  const stats = {
+    total:    apps.length,
+    approved: apps.filter(a => DONE_STATUSES.has(a.status)).length,
+    pending:  apps.filter(a => !DONE_STATUSES.has(a.status)).length,
+  }
 
   return (
     <ApplicantShell title="My Profile" subtitle="Your applicant account details and preferences">
@@ -109,23 +125,29 @@ export default function ApplicantProfile() {
           <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
             <div className="text-[14.5px] font-bold mb-[16px]">Applications</div>
             <div className="grid grid-cols-3 gap-[12px] mb-[18px]">
-              <Stat label="Total"    value={profile.stats?.total_applications}    accent="#1f5f4f" />
-              <Stat label="Approved" value={profile.stats?.approved_applications} accent="#1f7a4d" />
-              <Stat label="Pending"  value={profile.stats?.pending_applications}  accent="#b45309" />
+              <Stat label="Total"    value={stats.total}    accent="#1f5f4f" />
+              <Stat label="Approved" value={stats.approved} accent="#1f7a4d" />
+              <Stat label="Pending"  value={stats.pending}  accent="#b45309" />
             </div>
-            {profile.linked_applications?.length > 0 ? (
+            {apps.length > 0 ? (
               <div className="flex flex-col gap-[8px]">
-                {profile.linked_applications.map(id => (
-                  <button
-                    key={id}
-                    onClick={() => navigate(`/applicant/track/${id}`)}
-                    className="flex items-center justify-between bg-[#f7f9f8] rounded-[9px] px-[14px] py-[10px] cursor-pointer border-none hover:bg-[#eef3f0] transition-colors text-left"
-                    style={{ fontFamily: 'inherit' }}
-                  >
-                    <span className="mono text-[12.5px] font-semibold text-[#16201c]">{id}</span>
-                    <span className="text-[11.5px] text-[#1f5f4f] font-semibold">Track ›</span>
-                  </button>
-                ))}
+                {apps.map(a => {
+                  const s = STATUS[a.status] || { label: a.status, fg: '#475569', bg: '#eef1f4' }
+                  return (
+                    <button
+                      key={a.application_id}
+                      onClick={() => navigate(`/applicant/track/${a.application_id}`)}
+                      className="flex items-center gap-[10px] bg-[#f7f9f8] rounded-[9px] px-[14px] py-[10px] cursor-pointer border-none hover:bg-[#eef3f0] transition-colors text-left"
+                      style={{ fontFamily: 'inherit' }}
+                    >
+                      <span className="mono text-[12.5px] font-semibold text-[#16201c]">{a.application_id}</span>
+                      <span className="text-[10.5px] font-semibold px-[8px] py-[2px] rounded-full" style={{ color: s.fg, background: s.bg }}>
+                        {s.label}
+                      </span>
+                      <span className="ml-auto text-[11.5px] text-[#1f5f4f] font-semibold">Track ›</span>
+                    </button>
+                  )
+                })}
               </div>
             ) : (
               <p className="text-[12.5px] text-[#9aa8a2]">No applications submitted yet.</p>
