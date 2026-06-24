@@ -8,6 +8,7 @@ from app.features.staff import service
 from app.features.staff.assignment import find_best_surveyor
 from app.database import applications_col
 from app.dependencies import require_staff_role
+from app.utils.applications import parcel_of, parcel_zone_of
 
 router = APIRouter(prefix="/staff", tags=["Staff"], dependencies=[Depends(require_staff_role)])
 app_router = APIRouter(prefix="/applications", tags=["Surveyor & Registrar Actions"], dependencies=[Depends(require_staff_role)])
@@ -51,12 +52,11 @@ def auto_assign_surveyor(application_id: str):
     if app.get("status") != "survey_required":
         raise HTTPException(status_code=400, detail="Application not in survey_required state")
 
-    parcel_ref = app.get("parcel_ref", {})
-    surveyor = find_best_surveyor(parcel_ref.get("zone_id"), app.get("application_type", ""), app.get("priority", "normal"))
+    surveyor = find_best_surveyor(parcel_zone_of(app), app.get("application_type", ""), app.get("priority", "normal"))
     if not surveyor:
         raise HTTPException(status_code=404, detail="No available surveyor found")
 
-    parcel_id = parcel_ref.get("parcel_id")
+    parcel_id = parcel_of(app).get("parcel_id")
     task = service.create_survey_task(application_id, str(surveyor["_id"]), str(parcel_id) if parcel_id else None)
     return _serialize_task(task)
 

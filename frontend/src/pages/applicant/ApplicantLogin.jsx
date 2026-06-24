@@ -23,19 +23,23 @@ export default function ApplicantLogin() {
     const localUser = APPLICANT_USERS[key]
     setLoading(key)
 
-    // Register fresh and cache the new backend id.
-    // Returns null if registration fails (e.g. 409 with no recoverable id).
+    // Register fresh and cache the backend id; on 409/offline fall back to the known APP- id.
     async function registerFresh() {
+      let id = null
       try {
         const result = await registerApplicant(localUser)
-        storeApplicantId(localUser.nationalId, result.applicant_id)
-        return result.applicant_id
+        id = result.applicant_id || localUser.applicantId
       } catch {
-        return null
+        // already registered (409) or offline — use the known APP- id
+        id = localUser.applicantId || null
       }
+      if (id) storeApplicantId(localUser.nationalId, id)
+      return id
     }
 
     let applicantId = getStoredApplicantId(localUser.nationalId)
+    // ignore stale values that fell back to the national id
+    if (applicantId === localUser.nationalId) applicantId = null
 
     if (applicantId) {
       // Validate the cached id still exists — the DB may have been reseeded,

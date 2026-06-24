@@ -21,6 +21,11 @@ export async function registerApplicant(user) {
   return res.data
 }
 
+export async function submitApplication(payload) {
+  const res = await api.post('/applications/', payload)
+  return res.data
+}
+
 export async function getApplicant(applicantId) {
   const res = await api.get(`/applicants/${applicantId}`)
   return res.data
