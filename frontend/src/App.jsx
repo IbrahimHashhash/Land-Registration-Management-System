@@ -8,6 +8,7 @@ import ApplicationManagement from './pages/ApplicationManagement'
 import ApplicationDetails from './pages/ApplicationDetails'
 import RegistrarReview from './pages/RegistrarReview'
 import CertificateIssuance from './pages/CertificateIssuance'
+import AppShell from './components/AppShell'
 import { ApplicantProvider } from './context/ApplicantContext'
 import ApplicantLogin from './pages/applicant/ApplicantLogin'
 import ApplicantDashboard from './pages/applicant/ApplicantDashboard'
@@ -44,6 +45,8 @@ export default function App() {
         <Route path="/applications/:id"    element={<ApplicationDetails />} />
         <Route path="/review/:id"          element={<RegistrarReview />} />
         <Route path="/certificates"        element={<CertificateIssuance />} />
+        <Route path="/map"                 element={<LiveMap Shell={AppShell} />} />
+        <Route path="/analytics"           element={<AnalyticsDashboard Shell={AppShell} />} />
         <Route path="/register" element={<RegisterApplicant />} />
 
         {/* Applicant portal */}

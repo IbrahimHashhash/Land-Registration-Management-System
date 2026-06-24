@@ -21,7 +21,7 @@ function MonthlyBars({ data, color }) {
   )
 }
 
-export default function AnalyticsDashboard() {
+export default function AnalyticsDashboard({ Shell = SurveyorShell }) {
   const [kpis, setKpis] = useState(null)
   const [byZone, setByZone] = useState({})
   const [byStatus, setByStatus] = useState({})
@@ -56,7 +56,7 @@ export default function AnalyticsDashboard() {
   const csvUrl = `${api.defaults.baseURL}/analytics/export/applications.csv`
 
   return (
-    <SurveyorShell title="Analytics Dashboard" subtitle="Operational and spatial insights">
+    <Shell title="Analytics Dashboard" subtitle="Operational and spatial insights">
       <div className="flex justify-end mb-4">
         <a
           href={csvUrl}
@@ -237,6 +237,6 @@ export default function AnalyticsDashboard() {
           )}
         </div>
       </div>
-    </SurveyorShell>
+    </Shell>
   )
 }
