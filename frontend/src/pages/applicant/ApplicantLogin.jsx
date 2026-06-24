@@ -101,9 +101,6 @@ export default function ApplicantLogin() {
           </Link>
         </div>
 
-        <div className="mt-[24px] pt-[18px] border-t border-[#eef1ef] text-[11.5px] text-[#9aa8a2] text-center">
-          COMP4382 · Land Registration Management Information System
-        </div>
       </div>
     </div>
   )
