@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import BackToHome from '../../components/ui/BackToHome'
 import { listStaff } from '../../api/staff'
 import { setSurveyor } from '../../context/surveyorSession'
 
@@ -28,6 +29,7 @@ export default function SurveyorLogin() {
       className="min-h-screen flex items-center justify-center"
       style={{ background: 'radial-gradient(ellipse at 50% 0%,#eef3f0,#f4f6f5)' }}
     >
+      <BackToHome />
       <div
         className="w-[460px] bg-white border border-[#e3e8e5] rounded-[16px] px-[36px] py-[38px]"
         style={{ boxShadow: '0 24px 60px -28px rgba(20,40,32,.32)' }}
@@ -82,6 +84,7 @@ export default function SurveyorLogin() {
             )
           })}
         </div>
+
       </div>
     </div>
   )

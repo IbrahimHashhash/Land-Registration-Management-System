@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import BackToHome from '../../components/ui/BackToHome'
 import { useApplicant, buildUserFromApplicant } from '../../context/ApplicantContext'
 import { getApplicantByNationalId } from '../../api/applicant'
 
@@ -21,7 +22,7 @@ export default function ApplicantLogin() {
     setError('')
     try {
       const record = await getApplicantByNationalId(id)
-      setUser(buildUserFromApplicant(record))
+      setUser({ ...buildUserFromApplicant(record), nationalId: id })
       navigate('/applicant')
     } catch (err) {
       if (err.response?.status === 404) {
@@ -39,6 +40,7 @@ export default function ApplicantLogin() {
       className="min-h-screen flex items-center justify-center"
       style={{ background: 'radial-gradient(ellipse at 50% 0%,#eef3f0,#f4f6f5)' }}
     >
+      <BackToHome />
       <div
         className="w-[430px] bg-white border border-[#e3e8e5] rounded-[16px] px-[36px] py-[38px]"
         style={{ boxShadow: '0 24px 60px -28px rgba(20,40,32,.32)' }}
@@ -95,7 +97,7 @@ export default function ApplicantLogin() {
         <div className="mt-[18px] text-center text-[12.5px] text-[#5e6b65]">
           New here?{' '}
           <Link to="/register" className="text-[#1f5f4f] font-semibold no-underline hover:underline">
-            Register an applicant
+            Register as applicant
           </Link>
         </div>
 

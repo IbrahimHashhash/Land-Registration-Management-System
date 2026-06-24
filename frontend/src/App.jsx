@@ -1,5 +1,5 @@
 import React from 'react'
-import { BrowserRouter, Routes, Route, Link, Outlet } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom'
 import Login from './pages/Login'
 import RegisterApplicant from './pages/RegisterApplicant'
 import StaffDashboard from './pages/StaffDashboard'
@@ -44,12 +44,7 @@ export default function App() {
         <Route path="/applications/:id"    element={<ApplicationDetails />} />
         <Route path="/review/:id"          element={<RegistrarReview />} />
         <Route path="/certificates"        element={<CertificateIssuance />} />
-        <Route path="/register" element={
-          <div className="max-w-3xl mx-auto px-6 py-8">
-            <Link to="/dashboard" className="text-sm text-blue-600 hover:underline">← Back to Dashboard</Link>
-            <RegisterApplicant />
-          </div>
-        } />
+        <Route path="/register" element={<RegisterApplicant />} />
 
         {/* Applicant portal */}
         <Route path="/applicant" element={<ApplicantRoot />}>

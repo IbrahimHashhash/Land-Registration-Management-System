@@ -22,11 +22,6 @@ const VERIFICATION_BADGE = {
   unverified: { label: 'Unverified', fg: '#b45309', bg: '#fbeedd' },
 }
 
-const NOTIFICATION_LABELS = {
-  on_status_change:     'Status change updates',
-  on_missing_documents: 'Missing document alerts',
-  on_certificate_ready: 'Certificate ready notice',
-}
 
 export default function ApplicantProfile() {
   const { user } = useApplicant()
@@ -169,19 +164,6 @@ export default function ApplicantProfile() {
             </div>
           </div>
 
-          {/* Notification preferences (stubbed) */}
-          <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
-            <div className="text-[14.5px] font-bold mb-[4px]">Notification Preferences</div>
-            <div className="text-[11.5px] text-[#9aa8a2] mb-[14px]">
-              Notifications are delivered via your preferred contact channel.
-            </div>
-            <div className="flex flex-col gap-[10px]">
-              {Object.entries(NOTIFICATION_LABELS).map(([key, label]) => (
-                <Toggle key={key} label={label} enabled={profile.preferences?.notifications?.[key]} />
-              ))}
-            </div>
-          </div>
-
         </div>
       ) : null}
     </ApplicantShell>
@@ -204,18 +186,6 @@ function Stat({ label, value, accent }) {
     <div className="rounded-[11px] p-[16px] text-center bg-[#f7f9f8] border border-[#eef1ef]">
       <p className="text-[26px] font-bold leading-none" style={{ color: accent }}>{value ?? 0}</p>
       <p className="text-[11.5px] font-medium text-[#5e6b65] mt-[7px]">{label}</p>
-    </div>
-  )
-}
-
-function Toggle({ label, enabled }) {
-  return (
-    <div className="flex items-center gap-[11px]">
-      <span className="w-[8px] h-[8px] rounded-full shrink-0" style={{ background: enabled ? '#1f7a4d' : '#c2ccc7' }} />
-      <span className="text-[13px] text-[#384640]">{label}</span>
-      <span className="ml-auto text-[11.5px] font-semibold" style={{ color: enabled ? '#1f7a4d' : '#9aa8a2' }}>
-        {enabled ? 'On' : 'Off'}
-      </span>
     </div>
   )
 }

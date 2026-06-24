@@ -5,7 +5,7 @@ import 'leaflet/dist/leaflet.css'
 import ApplicantShell from '../../components/ApplicantShell'
 import { useApplicant } from '../../context/ApplicantContext'
 import FormSelect from '../../components/ui/FormSelect'
-import { APP_TYPES, FORM_STEPS, ZONES, LAND_USES, APPLICANT_TYPE_LABELS, DOC_TYPES } from '../../constants/applicationForms'
+import { APP_TYPES, FORM_STEPS, LAND_USES, APPLICANT_TYPE_LABELS, DOC_TYPES } from '../../constants/applicationForms'
 import { submitApplication, uploadDocument } from '../../api/applicant'
 import { apiError } from '../../utils/apiError'
 
@@ -129,10 +129,19 @@ export default function SubmitApplication() {
   const [step, setStep] = useState(1)
   const [selectedType, setSelectedType] = useState(null)
   const [confirmed, setConfirmed] = useState(false)
-  const [parcel, setParcel] = useState({ parcel_no: '', block_no: '', basin_no: '', zone_id: ZONES[0] })
+  const [parcel, setParcel] = useState({ parcel_no: '', block_no: '', basin_no: '', zone_id: user?.zoneId || '' })
   const [point, setPoint] = useState(null)
   const [docs, setDocs] = useState([])
   const [busy, setBusy] = useState(false)
+
+  const [name,       setName]       = useState(user?.name       || '')
+  const [nationalId, setNationalId] = useState(user?.nationalId || '')
+  const [email,      setEmail]      = useState(user?.email      || '')
+  const [phone,      setPhone]      = useState(user?.phone      || '')
+
+  const [stepError, setStepError] = useState('')
+  const [error,     setError]     = useState('')
+  const [result,    setResult]    = useState(null)
 
   function addFiles(fileList) {
     const picked = Array.from(fileList).map(f => ({ name: f.name, size: f.size, type: 'other' }))
@@ -140,21 +149,32 @@ export default function SubmitApplication() {
   }
   function setDocType(i, type) { setDocs(d => d.map((doc, idx) => idx === i ? { ...doc, type } : doc)) }
   function removeDoc(i) { setDocs(d => d.filter((_, idx) => idx !== i)) }
-  const [error, setError] = useState('')
-  const [result, setResult] = useState(null)
 
   const setP = (k) => (e) => setParcel(p => ({ ...p, [k]: e.target.value }))
 
-  function next() { if (step < 4) setStep(s => s + 1) }
-  function prev() { if (step > 1) setStep(s => s - 1) }
+  function next() {
+    setStepError('')
+    if (step === 1 && !selectedType) {
+      setStepError('Please select an application type.')
+      return
+    }
+    if (step === 2) {
+      if (!name.trim())       { setStepError('Full name is required.');  return }
+      if (!nationalId.trim()) { setStepError('National ID is required.'); return }
+      if (!email.trim())      { setStepError('Email is required.');       return }
+    }
+    if (step === 3) {
+      if (!parcel.parcel_no.trim()) { setStepError('Parcel number is required.'); return }
+      if (!parcel.block_no.trim())  { setStepError('Block number is required.');  return }
+    }
+    if (step < 4) setStep(s => s + 1)
+  }
+  function prev() { setStepError(''); if (step > 1) setStep(s => s - 1) }
 
   async function submit() {
     setError('')
-    if (!selectedType) { setError('Please select an application type.'); setStep(1); return }
-    if (!parcel.parcel_no.trim() || !parcel.block_no.trim()) {
-      setError('Please enter the parcel and block number.'); setStep(3); return
-    }
-    const applicantId = user?.applicant_id || user?.applicantId || user?.id
+    const applicantId = user?.applicant_id || user?.applicantId
+    if (!applicantId) { setError('Your account is not registered. Please sign out and register again.'); return }
     setBusy(true)
     try {
       const res = await submitApplication({
@@ -269,7 +289,8 @@ export default function SubmitApplication() {
               </button>
             ))}
           </div>
-          <div className="flex justify-end mt-[22px]">
+          {stepError && <div className="mt-[16px] px-[13px] py-[10px] rounded-[9px] bg-[#fbe6e6] text-[#b91c1c] text-[12.5px]">{stepError}</div>}
+          <div className="flex justify-end mt-[16px]">
             <BtnPrimary onClick={next}>Continue</BtnPrimary>
           </div>
         </div>
@@ -283,19 +304,19 @@ export default function SubmitApplication() {
           <div className="grid grid-cols-2 gap-[16px]">
             <div>
               <FieldLabel>Full Name *</FieldLabel>
-              <Input defaultValue={user?.name} />
+              <Input value={name} onChange={e => setName(e.target.value)} placeholder="Enter your full name" />
             </div>
             <div>
               <FieldLabel>National ID *</FieldLabel>
-              <Input defaultValue={user?.nationalId} className="w-full border border-[#e3e8e5] rounded-[9px] px-[13px] py-[11px] text-[13px] outline-none mono" />
+              <Input value={nationalId} onChange={e => setNationalId(e.target.value)} placeholder="e.g. 123456789" className="w-full border border-[#e3e8e5] rounded-[9px] px-[13px] py-[11px] text-[13px] outline-none mono focus:border-[#1f5f4f] transition-colors bg-white" style={{ fontFamily: 'inherit' }} />
             </div>
             <div>
               <FieldLabel>Email *</FieldLabel>
-              <Input defaultValue={user?.email} />
+              <Input value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com" type="email" />
             </div>
             <div>
-              <FieldLabel>Phone *</FieldLabel>
-              <Input defaultValue={user?.phone} className="w-full border border-[#e3e8e5] rounded-[9px] px-[13px] py-[11px] text-[13px] outline-none mono" />
+              <FieldLabel>Phone</FieldLabel>
+              <Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="e.g. +970599000000" className="w-full border border-[#e3e8e5] rounded-[9px] px-[13px] py-[11px] text-[13px] outline-none mono focus:border-[#1f5f4f] transition-colors bg-white" style={{ fontFamily: 'inherit' }} />
             </div>
             <div>
               <FieldLabel>Applicant Type</FieldLabel>
@@ -314,7 +335,8 @@ export default function SubmitApplication() {
               <Input defaultValue={user?.address} />
             </div>
           </div>
-          <div className="flex justify-between mt-[22px]">
+          {stepError && <div className="mt-[16px] px-[13px] py-[10px] rounded-[9px] bg-[#fbe6e6] text-[#b91c1c] text-[12.5px]">{stepError}</div>}
+          <div className="flex justify-between mt-[16px]">
             <BtnSecondary onClick={prev}>Back</BtnSecondary>
             <BtnPrimary onClick={next}>Continue</BtnPrimary>
           </div>
@@ -341,9 +363,7 @@ export default function SubmitApplication() {
             </div>
             <div>
               <FieldLabel>Zone *</FieldLabel>
-              <FormSelect value={parcel.zone_id} onChange={setP('zone_id')}>
-                {ZONES.map(z => <option key={z} value={z}>{z}</option>)}
-              </FormSelect>
+              <Input placeholder="e.g. ZONE-RM-01" className="w-full border border-[#e3e8e5] rounded-[9px] px-[13px] py-[11px] text-[13px] outline-none mono focus:border-[#1f5f4f] transition-colors bg-white" style={{ fontFamily: 'inherit' }} value={parcel.zone_id} onChange={setP('zone_id')} />
             </div>
             <div className="col-span-2">
               <FieldLabel>Land Use</FieldLabel>
@@ -367,7 +387,8 @@ export default function SubmitApplication() {
             </div>
           </div>
 
-          <div className="flex justify-between mt-[22px]">
+          {stepError && <div className="mt-[16px] px-[13px] py-[10px] rounded-[9px] bg-[#fbe6e6] text-[#b91c1c] text-[12.5px]">{stepError}</div>}
+          <div className="flex justify-between mt-[16px]">
             <BtnSecondary onClick={prev}>Back</BtnSecondary>
             <BtnPrimary onClick={next}>Continue</BtnPrimary>
           </div>
