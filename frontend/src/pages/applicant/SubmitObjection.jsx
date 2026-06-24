@@ -1,46 +1,67 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ApplicantShell from '../../components/ApplicantShell'
 import { useApplicant } from '../../context/ApplicantContext'
-import { getApplicantApplications, submitObjection } from '../../api/applicant'
+import {
+  getApplicantApplications,
+  getApplicantObjections,
+  submitObjection,
+} from '../../api/applicant'
 import FormSelect from '../../components/ui/FormSelect'
 import { TYPES } from '../../theme'
 
-const OBJECTION_STATUS = {
-  open:         { fg: '#b45309', bg: '#fbeedd' },
-  under_review: { fg: '#1e5fae', bg: '#e7f0fb' },
-  resolved:     { fg: '#1f7a4d', bg: '#e2f3e9' },
+const OBJ_STATUS_BADGE = {
+  pending:    { label: 'Pending',    fg: '#b45309', bg: '#fbeedd' },
+  reviewing:  { label: 'Under Review', fg: '#be123c', bg: '#fbe4ea' },
+  resolved:   { label: 'Resolved',   fg: '#1f7a4d', bg: '#e2f3e9' },
+  dismissed:  { label: 'Dismissed',  fg: '#475569', bg: '#eef1f4' },
 }
 
-function titleCase(s) {
-  return String(s || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+function formatDate(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 export default function SubmitObjection() {
   const { user } = useApplicant()
   const navigate = useNavigate()
 
-  const [apps, setApps]               = useState([])
+  const [apps, setApps] = useState([])
   const [appsLoading, setAppsLoading] = useState(true)
-  const [selectedAppId, setSelectedAppId] = useState('')
+  const [existingObjections, setExistingObjections] = useState([])
+  const [objLoading, setObjLoading] = useState(true)
+
+  const [selectedAppIdx, setSelectedAppIdx] = useState(0)
   const [reason,  setReason]  = useState('')
-  const [status,  setStatus]  = useState('idle') // idle | loading | success | error
+  const [status,  setStatus]  = useState('idle')
   const [errMsg,  setErrMsg]  = useState('')
-  const [attachments, setAttachments] = useState([]) // file names (metadata only)
-  const [objections, setObjections]   = useState([]) // objections filed this session (from API responses)
+  const [attachments, setAttachments] = useState([])
   const fileRef = useRef(null)
 
+  const selectedApp = apps[selectedAppIdx]
+
   useEffect(() => {
-    if (!user?.applicant_id) { setAppsLoading(false); return }
+    if (!user?.applicant_id) { setAppsLoading(false); setObjLoading(false); return }
     setAppsLoading(true)
     getApplicantApplications(user.applicant_id)
-      .then(list => {
-        const arr = Array.isArray(list) ? list : []
-        setApps(arr)
-        setSelectedAppId(prev => prev || arr[0]?.application_id || '')
-      })
+      .then(list => setApps(list || []))
       .catch(() => setApps([]))
       .finally(() => setAppsLoading(false))
+  }, [user?.applicant_id])
+
+  function refreshObjections() {
+    if (!user?.applicant_id) return
+    setObjLoading(true)
+    getApplicantObjections(user.applicant_id)
+      .then(list => setExistingObjections(list || []))
+      .catch(() => setExistingObjections([]))
+      .finally(() => setObjLoading(false))
+  }
+
+  useEffect(() => {
+    refreshObjections()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.applicant_id])
 
   function handleFileChange(e) {
@@ -54,7 +75,11 @@ export default function SubmitObjection() {
   }
 
   async function handleSubmit() {
-    if (!selectedAppId) return
+    if (!selectedApp) {
+      setErrMsg('Please select an application.')
+      setStatus('error')
+      return
+    }
     if (!reason.trim()) {
       setErrMsg('Please describe your objection.')
       setStatus('error')
@@ -63,15 +88,15 @@ export default function SubmitObjection() {
     setStatus('loading')
     setErrMsg('')
     try {
-      const result = await submitObjection(selectedAppId, {
+      await submitObjection(selectedApp.application_id, {
         author_id: user.applicant_id,
         reason: reason.trim(),
         supporting_documents: attachments,
       })
       setStatus('success')
-      setObjections(prev => [result, ...prev])
       setReason('')
       setAttachments([])
+      refreshObjections()
     } catch (err) {
       const detail = err.response?.data?.detail
       if (err.response?.status === 404) {
@@ -91,17 +116,6 @@ export default function SubmitObjection() {
       subtitle="File a dispute against a registration decision"
     >
       <div className="max-w-[680px]">
-        {appsLoading ? (
-          <div className="py-10 flex items-center justify-center gap-2 text-[13px] text-[#9aa8a2]">
-            <div className="w-4 h-4 border-2 border-[#1f5f4f] border-t-transparent rounded-full animate-spin" />
-            Loading…
-          </div>
-        ) : apps.length === 0 ? (
-          <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[28px] text-[13px] text-[#9aa8a2]">
-            You have no applications to file an objection against.
-          </div>
-        ) : (
-        <>
         <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[28px] mb-[16px]">
           <div className="text-[17px] font-bold mb-[5px]">Submit Objection</div>
           <div className="text-[13px] text-[#5e6b65] mb-[22px]">
@@ -111,16 +125,22 @@ export default function SubmitObjection() {
           <div className="flex flex-col gap-[16px]">
             <div>
               <label className="text-[12px] font-semibold text-[#384640] block mb-[6px]">Application *</label>
-              <FormSelect
-                value={selectedAppId}
-                onChange={e => { setSelectedAppId(e.target.value); setStatus('idle') }}
-              >
-                {apps.map(a => (
-                  <option key={a.application_id} value={a.application_id}>
-                    {a.application_id} · {TYPES[a.application_type] || titleCase(a.application_type)}
-                  </option>
-                ))}
-              </FormSelect>
+              {appsLoading ? (
+                <div className="text-[12.5px] text-[#9aa8a2]">Loading applications…</div>
+              ) : apps.length === 0 ? (
+                <div className="text-[12.5px] text-[#9aa8a2]">You have no applications to file an objection against.</div>
+              ) : (
+                <FormSelect
+                  value={selectedAppIdx}
+                  onChange={e => { setSelectedAppIdx(Number(e.target.value)); setStatus('idle') }}
+                >
+                  {apps.map((a, i) => (
+                    <option key={a.application_id} value={i}>
+                      {a.application_id} · {TYPES[a.application_type] || a.application_type}
+                    </option>
+                  ))}
+                </FormSelect>
+              )}
             </div>
 
             <div>
@@ -211,7 +231,7 @@ export default function SubmitObjection() {
                 </button>
                 <button
                   onClick={handleSubmit}
-                  disabled={status === 'loading'}
+                  disabled={status === 'loading' || apps.length === 0}
                   className="flex-1 py-[11px] border-none rounded-[9px] bg-[#be123c] text-white text-[13.5px] font-semibold cursor-pointer hover:bg-[#9f1239] transition-colors disabled:opacity-60 disabled:cursor-wait flex items-center justify-center gap-2"
                   style={{ fontFamily: 'inherit' }}
                 >
@@ -227,13 +247,15 @@ export default function SubmitObjection() {
           )}
         </div>
 
-        {/* Objections filed this session (from the API response) */}
         <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
           <div className="text-[14.5px] font-bold mb-[14px]">My Objections</div>
-          {objections.length === 0 ? (
+          {objLoading ? (
+            <div className="text-[13px] text-[#9aa8a2] py-[8px]">Loading…</div>
+          ) : existingObjections.length === 0 ? (
             <div className="text-[13px] text-[#9aa8a2] py-[8px]">No objections filed yet.</div>
-          ) : objections.map(obj => {
-            const os = OBJECTION_STATUS[obj.status] || { fg: '#475569', bg: '#eef1f4' }
+          ) : existingObjections.map(obj => {
+            const badge = OBJ_STATUS_BADGE[obj.status] ||
+              { label: obj.status, fg: '#475569', bg: '#eef1f4' }
             return (
               <div key={obj.objection_id} className="flex items-center gap-[13px] p-[14px] border border-[#eef1ef] rounded-[11px] mb-[8px] last:mb-0">
                 <div className="w-[40px] h-[40px] rounded-[9px] bg-[#fbe4ea] flex items-center justify-center shrink-0">
@@ -245,19 +267,21 @@ export default function SubmitObjection() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-[9px]">
-                    <span className="mono text-[13px] font-semibold">{obj.objection_id}</span>
-                    <span className="text-[10.5px] font-semibold px-[9px] py-[3px] rounded-full" style={{ color: os.fg, background: os.bg }}>
-                      {titleCase(obj.status)}
+                    <span className="mono text-[13px] font-semibold">{obj.application_id}</span>
+                    <span
+                      className="text-[10.5px] font-semibold px-[9px] py-[3px] rounded-full"
+                      style={{ color: badge.fg, background: badge.bg }}
+                    >
+                      {badge.label}
                     </span>
                   </div>
-                  <div className="text-[12.5px] text-[#5e6b65] mt-1">{obj.application_id} · {obj.reason}</div>
+                  <div className="text-[12.5px] text-[#5e6b65] mt-1 line-clamp-2">{obj.reason}</div>
+                  <div className="text-[11px] text-[#9aa8a2] mt-1">Filed {formatDate(obj.created_at)}</div>
                 </div>
               </div>
             )
           })}
         </div>
-        </>
-        )}
       </div>
     </ApplicantShell>
   )

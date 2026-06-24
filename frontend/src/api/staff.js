@@ -4,6 +4,8 @@ const staffHeaders = (role = 'surveyor') => ({ headers: { 'X-Staff-Role': role }
 
 export const getStaff = (id) => api.get(`/staff/${id}`, staffHeaders())
 
+export const listStaff = (role) => api.get('/staff/', { ...staffHeaders(), params: role ? { role } : {} })
+
 export const getMyTasks = (surveyorId) => api.get(`/staff/${surveyorId}/tasks`, staffHeaders())
 
 export const autoAssignSurveyor = (applicationId) =>

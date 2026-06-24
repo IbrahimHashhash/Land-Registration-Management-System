@@ -2,7 +2,18 @@ from datetime import datetime, timezone
 import uuid
 from pymongo.errors import DuplicateKeyError
 from fastapi import HTTPException
+from bson import ObjectId
 from app.database import applicants_col, documents_col, logs_col, applications_col, objections_col
+
+
+def _clean(value):
+    if isinstance(value, ObjectId):
+        return str(value)
+    if isinstance(value, list):
+        return [_clean(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _clean(v) for k, v in value.items()}
+    return value
 from app.features.applicants.schemas import ApplicantCreate, DocumentUpload, CommentCreate, ObjectionCreate, ApplicationSummary
 
 
@@ -43,12 +54,6 @@ def create_applicant(data: ApplicantCreate) -> dict:
     try:
         applicants_col.insert_one(doc)
     except DuplicateKeyError:
-        # Idempotent by national_id: the applicant already exists but the caller
-        # lost its applicant_id (e.g. cleared browser storage). Return the existing
-        # record so the client can recover the id instead of being locked out.
-        existing = applicants_col.find_one({"identity.national_id": data.identity.national_id})
-        if existing:
-            return existing
         raise HTTPException(status_code=409, detail="National ID already registered")
     return doc
 
@@ -57,7 +62,35 @@ def get_applicant(applicant_id: str) -> dict:
     doc = applicants_col.find_one({"applicant_id": applicant_id})
     if not doc:
         raise HTTPException(status_code=404, detail="Applicant not found")
+    # Recompute stats + linked_applications from the applications collection so
+    # they are always accurate without denormalization on every transition.
+    apps = list(applications_col.find(
+        {"applicant_ref.applicant_id": applicant_id},
+        {"application_id": 1, "status": 1, "_id": 0},
+    ))
+    done = {"approved", "certificate_issued", "closed"}
+    pending = {"submitted", "pre_checked", "survey_required", "surveyed",
+               "legal_review", "missing_documents", "on_hold", "under_objection"}
+    doc["stats"] = {
+        "total_applications": len(apps),
+        "approved_applications": sum(1 for a in apps if a.get("status") in done),
+        "pending_applications": sum(1 for a in apps if a.get("status") in pending),
+    }
+    doc["linked_applications"] = [a["application_id"] for a in apps]
     return doc
+
+
+def update_verification_state(applicant_id: str, new_state: str) -> dict:
+    if new_state not in ("unverified", "verified", "suspended"):
+        raise HTTPException(status_code=400, detail="Invalid verification state")
+    update = {"verification_state": new_state}
+    if new_state == "verified":
+        update["identity.verified"] = True
+        update["identity.verified_at"] = datetime.now(timezone.utc)
+    result = applicants_col.update_one({"applicant_id": applicant_id}, {"$set": update})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Applicant not found")
+    return get_applicant(applicant_id)
 
 
 def upload_document(application_id: str, data: DocumentUpload) -> dict:
@@ -160,6 +193,39 @@ def get_timeline(application_id: str) -> list:
     return sorted(events, key=lambda e: e["at"])
 
 def get_applications_for_applicant(applicant_id: str) -> list:
-    # TODO: confirm field name with zaid — assuming applicant_ref.applicant_id
-    result = applications_col.find({"applicant_ref.applicant_id": applicant_id})
+    result = applications_col.find({"applicant_ref.applicant_id": applicant_id}).sort("submission_date", -1)
     return list(result)
+
+
+def get_applicant_by_national_id(national_id: str) -> dict | None:
+    return applicants_col.find_one({"identity.national_id": national_id})
+
+
+def list_documents_for_application(application_id: str) -> list:
+    return [_clean(dict(d)) for d in documents_col.find({"application_id": application_id}).sort("uploaded_at", -1)]
+
+
+def verify_document(application_id: str, document_id: str, status: str, by: str | None = None) -> dict:
+    if status not in ("verified", "pending_review", "rejected"):
+        raise HTTPException(status_code=400, detail="Invalid verification status")
+    result = documents_col.update_one(
+        {"document_id": document_id, "application_id": application_id},
+        {"$set": {"verification_status": status, "verified_at": datetime.now(timezone.utc)}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Document not found")
+    logs_col.update_one(
+        {"application_id": application_id},
+        {"$push": {"event_stream": {
+            "type": "document_verified",
+            "by": {"actor_type": "registrar", "actor_id": by},
+            "at": datetime.now(timezone.utc),
+            "meta": {"document_id": document_id, "verification_status": status},
+        }}, "$setOnInsert": {"application_id": application_id, "computed_kpis": {}}},
+        upsert=True,
+    )
+    return _clean(dict(documents_col.find_one({"document_id": document_id})))
+
+
+def list_objections_for_applicant(applicant_id: str) -> list:
+    return [_clean(dict(o)) for o in objections_col.find({"author_id": applicant_id}).sort("created_at", -1)]

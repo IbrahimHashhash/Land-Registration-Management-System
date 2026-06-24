@@ -1,0 +1,16 @@
+[
+  {
+    "certificate_id": "CERT-2026-0001",
+    "application_id": "LRMIS-2026-0099",
+    "parcel_id": "RM-Z01-B12-P145",
+    "certificate_type": "ownership_certificate",
+    "status": "issued",
+    "issued_to": { "applicant_id": "APP-DEMO0001", "full_name": "Nour Ahmad" },
+    "issued_at": "2026-02-10T12:00:00Z",
+    "issued_by": "registrar_09",
+    "verification": {
+      "qr_code_url": "/certificates/CERT-2026-0001/verify",
+      "digital_signature_stub": "signed_hash_example"
+    }
+  }
+]

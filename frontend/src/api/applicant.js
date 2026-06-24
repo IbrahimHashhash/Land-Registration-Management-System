@@ -31,6 +31,21 @@ export async function getApplicant(applicantId) {
   return res.data
 }
 
+export async function getApplicantByNationalId(nationalId) {
+  const res = await api.get(`/applicants/by-national-id/${encodeURIComponent(nationalId)}`)
+  return res.data
+}
+
+export async function getApplicantObjections(applicantId) {
+  const res = await api.get(`/applicants/${applicantId}/objections`)
+  return res.data
+}
+
+export async function getApplicationDocuments(applicationId) {
+  const res = await api.get(`/applications/${applicationId}/documents`)
+  return res.data
+}
+
 export async function getApplicantApplications(applicantId) {
   const res = await api.get(`/applicants/${applicantId}/applications`)
   return res.data

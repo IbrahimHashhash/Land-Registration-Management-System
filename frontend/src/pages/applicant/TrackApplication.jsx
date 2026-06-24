@@ -2,7 +2,13 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import ApplicantShell from '../../components/ApplicantShell'
 import { useApplicant } from '../../context/ApplicantContext'
-import { getApplicantApplications, getApplication, getTimeline, addComment } from '../../api/applicant'
+import {
+  getApplicantApplications,
+  getTimeline,
+  getApplicationDocuments,
+  addComment,
+} from '../../api/applicant'
+import { getApplication } from '../../api/applications'
 import { STATUS, TYPES } from '../../theme'
 
 const TYPE_LABELS = {
@@ -11,9 +17,8 @@ const TYPE_LABELS = {
   document_uploaded: 'Document Uploaded',
   comment_added:     'Comment Added',
   objection_created: 'Objection Filed',
-  objection_submitted: 'Objection Filed',
   status_changed:    'Status Changed',
-  missing_documents: 'Missing Document',
+  missing_document:  'Missing Document',
   survey_required:   'Survey Required',
 }
 
@@ -23,55 +28,43 @@ const TYPE_DOTS = {
   document_uploaded: '#1f5f4f',
   comment_added:     '#6d28d9',
   objection_created: '#be123c',
-  objection_submitted: '#be123c',
-  under_objection:   '#be123c',
   status_changed:    '#b45309',
-  missing_documents: '#b45309',
+  missing_document:  '#b45309',
   survey_required:   '#b45309',
-  approved:          '#1f7a4d',
-  certificate_issued:'#0e7490',
-  rejected:          '#b91c1c',
 }
 
-const DOC_STATUS = {
+const DOC_STATUS_BADGE = {
   verified:       { label: 'Verified',       fg: '#1f7a4d', bg: '#e2f3e9' },
   pending_review: { label: 'Pending Review', fg: '#b45309', bg: '#fbeedd' },
-  rejected:       { label: 'Rejected',       fg: '#b91c1c', bg: '#fbe6e6' },
   missing:        { label: 'Missing',        fg: '#b91c1c', bg: '#fbe6e6' },
+  rejected:       { label: 'Rejected',       fg: '#b91c1c', bg: '#fbe6e6' },
 }
 
-const SURVEYED_STATES = new Set(['surveyed', 'legal_review', 'approved', 'certificate_issued', 'closed'])
-
-function titleCase(s) {
-  return String(s || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-}
-
-function formatDate(iso, withTime) {
+function formatDateTime(iso) {
   if (!iso) return '—'
-  const opts = withTime
-    ? { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }
-    : { month: 'short', day: 'numeric', year: 'numeric' }
-  return new Date(iso).toLocaleString('en-US', opts)
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '—'
+    : d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-function mapApiTimeline(events) {
-  return events.map(t => ({
-    event: TYPE_LABELS[t.type] || titleCase(t.type),
+function formatDate(iso) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '—'
+    : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function mapTimeline(events) {
+  return (events || []).map(t => ({
+    event: TYPE_LABELS[t.type] || t.type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
     actor: t.by?.actor_type === 'applicant' ? 'You · via web portal'
-         : t.by?.actor_type === 'registrar' ? `Registrar · ${t.by.actor_id || 'Office'}`
-         : t.by?.actor_type === 'staff'     ? `Staff · ${t.by.actor_id || 'Office'}`
-         : t.by?.actor_type === 'surveyor'  ? `Surveyor · ${t.by.actor_id || 'Field team'}`
+         : t.by?.actor_type === 'staff'     ? `Staff · ${t.by?.actor_id || 'Registrar Office'}`
+         : t.by?.actor_type === 'surveyor'  ? 'Surveyor · Field team'
          : 'System',
-    time: formatDate(t.at, true),
+    time: formatDateTime(t.at),
     dot: TYPE_DOTS[t.type] || '#9aa8a2',
-    detail: t.meta?.text || t.meta?.reason || t.meta?.note || null,
+    detail: t.meta?.text || t.meta?.reason || null,
   }))
-}
-
-function surveyInfo(status) {
-  if (status === 'survey_required') return { label: 'Survey Required', desc: 'Awaiting surveyor assignment.', color: '#b45309' }
-  if (SURVEYED_STATES.has(status))  return { label: 'Survey Completed', desc: 'Field survey has been completed.', color: '#1f7a4d' }
-  return { label: 'Not Started', desc: 'Application has not reached the survey stage.', color: '#5e6b65' }
 }
 
 export default function TrackApplication() {
@@ -79,57 +72,66 @@ export default function TrackApplication() {
   const navigate = useNavigate()
   const { id } = useParams()
 
-  const [apps, setApps]               = useState([])
+  const [apps, setApps] = useState([])
   const [appsLoading, setAppsLoading] = useState(true)
-  const [detail, setDetail]           = useState(null)
-  const [detailLoading, setDetailLoading] = useState(false)
-  const [timeline, setTimeline]       = useState([])
+  const [fullApp, setFullApp] = useState(null)
+  const [timeline, setTimeline] = useState([])
+  const [docs, setDocs] = useState([])
   const [timelineLoading, setTimelineLoading] = useState(false)
-  const [commentText,   setCommentText]   = useState('')
-  const [commentStatus, setCommentStatus] = useState('idle') // idle | loading | success | error
+  const [docsLoading, setDocsLoading] = useState(false)
+  const [commentText, setCommentText] = useState('')
+  const [commentStatus, setCommentStatus] = useState('idle')
 
-  // Load the applicant's applications from the DB
+  // Load applicant's applications
   useEffect(() => {
     if (!user?.applicant_id) { setAppsLoading(false); return }
     setAppsLoading(true)
     getApplicantApplications(user.applicant_id)
-      .then(list => setApps(Array.isArray(list) ? list : []))
+      .then(list => setApps(list || []))
       .catch(() => setApps([]))
       .finally(() => setAppsLoading(false))
   }, [user?.applicant_id])
 
-  const selectedId = id || apps[0]?.application_id
-  const summary = apps.find(a => a.application_id === selectedId)
+  const targetId = id || apps[0]?.application_id
+  const app = apps.find(a => a.application_id === targetId) || apps[0]
 
-  function refreshTimeline(appId) {
-    if (!appId) return
+  function refreshTimeline() {
+    if (!app?.application_id) return
     setTimelineLoading(true)
-    getTimeline(appId)
-      .then(events => setTimeline(Array.isArray(events) ? mapApiTimeline(events) : []))
+    getTimeline(app.application_id)
+      .then(events => setTimeline(mapTimeline(events)))
       .catch(() => setTimeline([]))
       .finally(() => setTimelineLoading(false))
   }
 
-  // Load full detail + timeline for the selected application
+  function refreshDocs() {
+    if (!app?.application_id) return
+    setDocsLoading(true)
+    getApplicationDocuments(app.application_id)
+      .then(list => setDocs(list || []))
+      .catch(() => setDocs([]))
+      .finally(() => setDocsLoading(false))
+  }
+
   useEffect(() => {
-    if (!selectedId) { setDetail(null); setTimeline([]); return }
-    setCommentStatus('idle')
-    setDetailLoading(true)
-    getApplication(selectedId)
-      .then(setDetail)
-      .catch(() => setDetail(null))
-      .finally(() => setDetailLoading(false))
-    refreshTimeline(selectedId)
-  }, [selectedId])
+    if (!app?.application_id) { setTimeline([]); setDocs([]); setFullApp(null); return }
+    refreshTimeline()
+    refreshDocs()
+    getApplication(app.application_id).then(r => setFullApp(r.data)).catch(() => setFullApp(null))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [app?.application_id])
 
   async function handleComment() {
     if (!commentText.trim()) return
     setCommentStatus('loading')
     try {
-      await addComment(selectedId, { author_id: user.applicant_id, text: commentText.trim() })
+      await addComment(app.application_id, {
+        author_id: user?.applicant_id,
+        text: commentText.trim(),
+      })
       setCommentStatus('success')
       setCommentText('')
-      refreshTimeline(selectedId)
+      refreshTimeline()
     } catch {
       setCommentStatus('error')
     }
@@ -137,7 +139,7 @@ export default function TrackApplication() {
 
   if (appsLoading) {
     return (
-      <ApplicantShell title="Track Application" subtitle="Loading your applications…">
+      <ApplicantShell title="Track Application" subtitle="Loading…">
         <div className="py-10 flex items-center justify-center gap-2 text-[13px] text-[#9aa8a2]">
           <div className="w-4 h-4 border-2 border-[#1f5f4f] border-t-transparent rounded-full animate-spin" />
           Loading…
@@ -146,11 +148,11 @@ export default function TrackApplication() {
     )
   }
 
-  if (apps.length === 0) {
+  if (!app) {
     return (
       <ApplicantShell title="Track Application" subtitle="No applications found">
         <div className="text-[13px] text-[#9aa8a2] pt-8 text-center">
-          You have no applications yet.{' '}
+          You have no applications to track.{' '}
           <button
             onClick={() => navigate('/applicant/submit')}
             className="text-[#1f5f4f] font-semibold cursor-pointer bg-transparent border-none p-0 hover:underline"
@@ -163,21 +165,11 @@ export default function TrackApplication() {
     )
   }
 
-  const status     = detail?.status || summary?.status
-  const typeKey    = detail?.application_type || summary?.application_type
-  const typeLabel  = TYPES[typeKey] || titleCase(typeKey)
-  const st         = STATUS[status] || { label: titleCase(status), fg: '#475569', bg: '#eef1f4' }
-  const parcel     = detail?.parcel
-  const parcelText = parcel ? `${parcel.parcel_no} / ${parcel.block_no}` : '—'
-  const zone       = parcel?.zone_id || '—'
-  const submitted  = formatDate(detail?.submission_date || summary?.submission_date)
-  const docs       = detail?.required_documents || []
-  const notes      = detail?.internal?.visibility !== 'staff_only' ? (detail?.internal?.notes || []) : []
-  const survey     = surveyInfo(status)
-  const nextStep   = detail?.workflow?.allowed_next?.[0]
+  const st = STATUS[app.status] || { label: app.status, fg: '#475569', bg: '#eef1f4' }
+  const typeLabel = TYPES[app.application_type] || app.application_type
 
   return (
-    <ApplicantShell title="Track Application" subtitle={`${selectedId} · ${typeLabel}`}>
+    <ApplicantShell title="Track Application" subtitle={`${app.application_id} · ${typeLabel}`}>
       <button
         onClick={() => navigate('/applicant')}
         className="inline-flex items-center gap-[6px] text-[13px] text-[#5e6b65] font-medium mb-[16px] cursor-pointer bg-transparent border-none p-0 hover:text-[#1f5f4f] transition-colors"
@@ -186,34 +178,35 @@ export default function TrackApplication() {
         ‹ Back to dashboard
       </button>
 
-      {/* App header */}
       <div className="flex items-start gap-[12px] mb-[20px] flex-wrap">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-[12px] flex-wrap">
-            <span className="mono text-[19px] font-semibold">{selectedId}</span>
-            <span className="text-[11.5px] font-semibold px-[12px] py-[5px] rounded-full" style={{ color: st.fg, background: st.bg }}>
+            <span className="mono text-[19px] font-semibold">{app.application_id}</span>
+            <span
+              className="text-[11.5px] font-semibold px-[12px] py-[5px] rounded-full"
+              style={{ color: st.fg, background: st.bg }}
+            >
               {st.label}
             </span>
           </div>
           <div className="text-[13.5px] text-[#5e6b65] mt-[6px]">
-            {typeLabel} · Parcel {parcelText} · {zone}
+            {typeLabel} · Submitted {formatDate(app.submission_date)}
           </div>
         </div>
       </div>
 
-      {/* App selector */}
       {apps.length > 1 && (
         <div className="flex gap-[8px] mb-[20px] flex-wrap">
           {apps.map(a => (
             <button
               key={a.application_id}
               onClick={() => navigate(`/applicant/track/${a.application_id}`)}
-              className="px-[12px] py-[7px] rounded-[9px] border text-[12.5px] font-semibold transition-colors cursor-pointer mono"
+              className="px-[12px] py-[7px] rounded-[9px] border text-[12.5px] font-semibold transition-colors cursor-pointer"
               style={{
                 fontFamily: 'inherit',
-                borderColor: a.application_id === selectedId ? '#1f5f4f' : '#e3e8e5',
-                background:  a.application_id === selectedId ? '#e7f1ee'  : '#fff',
-                color:       a.application_id === selectedId ? '#1f5f4f'  : '#384640',
+                borderColor: a.application_id === app.application_id ? '#1f5f4f' : '#e3e8e5',
+                background:  a.application_id === app.application_id ? '#e7f1ee'  : '#fff',
+                color:       a.application_id === app.application_id ? '#1f5f4f'  : '#384640',
               }}
             >
               {a.application_id}
@@ -223,47 +216,41 @@ export default function TrackApplication() {
       )}
 
       <div className="grid gap-[16px]" style={{ gridTemplateColumns: '1.5fr 1fr' }}>
-        {/* Left column */}
         <div className="flex flex-col gap-[16px]">
-
-          {/* Status timeline */}
           <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
             <div className="flex items-center justify-between mb-[18px]">
               <div className="text-[14.5px] font-bold">Status Timeline</div>
-              {(timelineLoading || detailLoading) && (
+              {timelineLoading && (
                 <div className="w-4 h-4 border-2 border-[#1f5f4f] border-t-transparent rounded-full animate-spin" />
               )}
             </div>
-            <div className="relative pl-[6px]">
-              {timeline.length === 0 && !timelineLoading ? (
-                <div className="text-[12.5px] text-[#9aa8a2]">No timeline events yet.</div>
-              ) : timeline.map((t, i) => (
-                <div key={i} className="relative pl-[24px] pb-[18px] border-l-2 border-[#eef1ef] ml-[5px]">
-                  <div className="absolute left-[-7px] top-[1px] w-[12px] h-[12px] rounded-full border-2 border-white" style={{ background: t.dot, boxShadow: `0 0 0 2px ${t.dot}` }} />
-                  <div className="text-[13px] font-semibold mt-[-3px]">{t.event}</div>
-                  <div className="text-[11.5px] text-[#5e6b65] mt-[2px]">{t.actor}</div>
-                  <div className="text-[11px] text-[#9aa8a2] mono mt-[2px]">{t.time}</div>
-                  {t.detail && (
-                    <div className="text-[12px] text-[#384640] mt-[7px] bg-[#f7f9f8] border border-[#eef1ef] rounded-[8px] px-[11px] py-[8px] leading-relaxed">
-                      {t.detail}
-                    </div>
-                  )}
-                </div>
-              ))}
-              {nextStep && (
-                <div className="relative pl-[24px] ml-[5px]">
-                  <div className="absolute left-[-7px] top-[1px] w-[12px] h-[12px] rounded-full bg-white border-2 border-dashed border-[#c2ccc7]" />
-                  <div className="text-[13px] font-semibold text-[#9aa8a2] mt-[-3px]">{titleCase(nextStep)}</div>
-                  <div className="text-[11.5px] text-[#9aa8a2] mt-[2px]">Next step · pending</div>
-                </div>
-              )}
-            </div>
+            {timeline.length === 0 && !timelineLoading ? (
+              <div className="text-[12.5px] text-[#9aa8a2]">No timeline events yet.</div>
+            ) : (
+              <div className="relative pl-[6px]">
+                {timeline.map((t, i) => (
+                  <div key={i} className="relative pl-[24px] pb-[18px] border-l-2 border-[#eef1ef] ml-[5px]">
+                    <div
+                      className="absolute left-[-7px] top-[1px] w-[12px] h-[12px] rounded-full border-2 border-white"
+                      style={{ background: t.dot, boxShadow: `0 0 0 2px ${t.dot}` }}
+                    />
+                    <div className="text-[13px] font-semibold mt-[-3px]">{t.event}</div>
+                    <div className="text-[11.5px] text-[#5e6b65] mt-[2px]">{t.actor}</div>
+                    <div className="text-[11px] text-[#9aa8a2] mono mt-[2px]">{t.time}</div>
+                    {t.detail && (
+                      <div className="text-[12px] text-[#384640] mt-[7px] bg-[#f7f9f8] border border-[#eef1ef] rounded-[8px] px-[11px] py-[8px] leading-relaxed">
+                        {t.detail}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Documents */}
           <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
             <div className="flex items-baseline justify-between mb-[14px]">
-              <div className="text-[14.5px] font-bold">Required Documents</div>
+              <div className="text-[14.5px] font-bold">Documents</div>
               <button
                 onClick={() => navigate('/applicant/upload')}
                 className="text-[12.5px] text-[#1f5f4f] font-semibold cursor-pointer bg-transparent border-none p-0 hover:underline"
@@ -272,12 +259,15 @@ export default function TrackApplication() {
                 Upload more
               </button>
             </div>
-            {docs.length === 0 ? (
-              <div className="text-[12.5px] text-[#9aa8a2]">No documents listed.</div>
+            {docsLoading ? (
+              <div className="text-[12.5px] text-[#9aa8a2] py-2">Loading documents…</div>
+            ) : docs.length === 0 ? (
+              <div className="text-[12.5px] text-[#9aa8a2] py-2">No documents uploaded yet.</div>
             ) : docs.map((d, i) => {
-              const ds = DOC_STATUS[d.status] || { label: titleCase(d.status), fg: '#475569', bg: '#eef1f4' }
+              const badge = DOC_STATUS_BADGE[d.verification_status] ||
+                { label: d.verification_status, fg: '#475569', bg: '#eef1f4' }
               return (
-                <div key={i} className="flex items-center gap-[13px] py-[11px] border-b border-[#f2f4f3] last:border-b-0">
+                <div key={d.document_id || i} className="flex items-center gap-[13px] py-[11px] border-b border-[#f2f4f3] last:border-b-0">
                   <div className="w-[36px] h-[36px] rounded-[8px] bg-[#f0f3f1] flex items-center justify-center shrink-0">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5e6b65" strokeWidth="2">
                       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -285,30 +275,20 @@ export default function TrackApplication() {
                     </svg>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[13px] font-semibold">{titleCase(d.document_type)}</div>
-                    <div className="text-[11.5px] text-[#5e6b65]">{d.required ? 'Required' : 'Optional'}</div>
+                    <div className="text-[13px] font-semibold">{d.document_type?.replace(/_/g, ' ')}</div>
+                    <div className="text-[11.5px] text-[#5e6b65] mono">{d.file_name}</div>
                   </div>
-                  <span className="text-[11px] font-semibold px-[10px] py-1 rounded-full shrink-0" style={{ color: ds.fg, background: ds.bg }}>
-                    {ds.label}
+                  <span
+                    className="text-[11px] font-semibold px-[10px] py-1 rounded-full shrink-0"
+                    style={{ color: badge.fg, background: badge.bg }}
+                  >
+                    {badge.label}
                   </span>
                 </div>
               )
             })}
           </div>
 
-          {/* Registrar notes (only those visible to applicant) */}
-          <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
-            <div className="text-[14.5px] font-bold mb-[14px]">Registrar Notes</div>
-            {notes.length === 0 ? (
-              <div className="text-[12.5px] text-[#9aa8a2]">No registrar notes shared with you.</div>
-            ) : notes.map((n, i) => (
-              <div key={i} className="text-[13px] text-[#384640] leading-relaxed p-[12px] bg-[#f7f9f8] rounded-[9px] mb-[8px] last:mb-0">
-                {n}
-              </div>
-            ))}
-          </div>
-
-          {/* Add comment */}
           <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
             <div className="text-[14.5px] font-bold mb-[14px]">Add Comment</div>
             {commentStatus === 'success' ? (
@@ -343,17 +323,14 @@ export default function TrackApplication() {
           </div>
         </div>
 
-        {/* Right column */}
         <div className="flex flex-col gap-[16px] self-start">
           <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
             <div className="text-[14.5px] font-bold mb-[14px]">Application Summary</div>
             <div className="flex flex-col gap-[11px] text-[12.5px]">
               {[
-                ['Type',      typeLabel,  false],
-                ['Parcel',    parcelText, true],
-                ['Zone',      zone,       true],
-                ['Submitted', submitted,  false],
-                ['Priority',  titleCase(detail?.priority) || 'Normal', false],
+                ['Type',      typeLabel,                       false],
+                ['Status',    st.label,                        false],
+                ['Submitted', formatDate(app.submission_date), false],
               ].map(([k, v, mono]) => (
                 <div key={k} className="flex justify-between gap-[10px]">
                   <span className="text-[#5e6b65]">{k}</span>
@@ -363,20 +340,67 @@ export default function TrackApplication() {
             </div>
           </div>
 
+          {/* Survey status — derived from current workflow state */}
           <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
             <div className="text-[14.5px] font-bold mb-[14px]">Survey Status</div>
-            <div className="flex items-center gap-[11px] p-[14px] bg-[#f7f9f8] rounded-[10px]">
-              <div className="w-[40px] h-[40px] rounded-[9px] flex items-center justify-center shrink-0" style={{ background: survey.color + '22', color: survey.color }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                </svg>
-              </div>
-              <div>
-                <div className="text-[13px] font-semibold" style={{ color: survey.color }}>{survey.label}</div>
-                <div className="text-[11.5px] text-[#5e6b65] mt-0.5 leading-snug">{survey.desc}</div>
-              </div>
-            </div>
+            {(() => {
+              const s = app.status
+              const bucket =
+                s === 'survey_required' ? { label: 'Awaiting assignment', color: '#b45309', desc: 'A surveyor will be assigned soon.' }
+                : s === 'surveyed'      ? { label: 'Survey completed',     color: '#1f7a4d', desc: 'Field survey is done; report uploaded.' }
+                : ['legal_review', 'approved', 'certificate_issued', 'closed'].includes(s)
+                                          ? { label: 'Survey completed',   color: '#1f7a4d', desc: 'Survey phase finished.' }
+                : { label: 'Not yet required', color: '#5e6b65', desc: 'Survey will be scheduled if needed.' }
+              return (
+                <div className="flex items-center gap-[11px] p-[14px] bg-[#f7f9f8] rounded-[10px]">
+                  <div className="w-[40px] h-[40px] rounded-[9px] flex items-center justify-center shrink-0"
+                    style={{ background: bucket.color + '22', color: bucket.color }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="text-[13px] font-semibold" style={{ color: bucket.color }}>{bucket.label}</div>
+                    <div className="text-[11.5px] text-[#5e6b65] mt-0.5 leading-snug">{bucket.desc}</div>
+                  </div>
+                </div>
+              )
+            })()}
           </div>
+
+          {/* Missing documents — required_documents minus what's been verified */}
+          {fullApp?.required_documents?.length > 0 && (
+            <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
+              <div className="text-[14.5px] font-bold mb-[14px]">Missing Documents</div>
+              {(() => {
+                const missing = fullApp.required_documents.filter(d => d.status !== 'verified')
+                if (missing.length === 0) {
+                  return <div className="text-[12.5px] text-[#1f7a4d]">All required documents verified.</div>
+                }
+                return missing.map((d, i) => (
+                  <div key={i} className="flex items-center justify-between py-[8px] border-b border-[#f2f4f3] last:border-b-0 text-[12.5px]">
+                    <span className="text-[#384640] capitalize">{d.document_type?.replace(/_/g, ' ')}</span>
+                    <span className="text-[11px] font-semibold px-[9px] py-[2px] rounded-full"
+                      style={{ color: '#b45309', background: '#fbeedd' }}>
+                      {(d.status || 'missing').replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                ))
+              })()}
+            </div>
+          )}
+
+          {/* Registrar notes — internal notes attached during transitions */}
+          {fullApp?.internal?.notes?.length > 0 && (
+            <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
+              <div className="text-[14.5px] font-bold mb-[14px]">Registrar Notes</div>
+              {fullApp.internal.notes.map((n, i) => (
+                <div key={i} className="text-[12.5px] text-[#384640] bg-[#f7f9f8] border border-[#eef1ef] rounded-[8px] px-[11px] py-[8px] mb-[8px] last:mb-0 leading-relaxed">
+                  {n}
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="flex flex-col gap-[9px]">
             <button
@@ -384,7 +408,7 @@ export default function TrackApplication() {
               className="w-full py-[11px] border border-[#e3e8e5] rounded-[9px] bg-white text-[#384640] text-[13px] font-semibold cursor-pointer hover:bg-[#f4f6f5] transition-colors"
               style={{ fontFamily: 'inherit' }}
             >
-              Upload Documents
+              Upload Missing Documents
             </button>
             <button
               onClick={() => navigate('/applicant/objection')}

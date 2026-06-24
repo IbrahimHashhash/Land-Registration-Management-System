@@ -63,6 +63,10 @@ class ApplicantInternal(ApplicantPublic):
     profile_public: bool
 
 
+class VerificationStateUpdate(BaseModel):
+    verification_state: Literal["unverified", "verified", "suspended"]
+
+
 
 class DocumentUpload(BaseModel):
     document_type: Literal["ownership_deed", "id_copy", "sale_contract", "survey_report", "power_of_attorney", "other"]
@@ -78,6 +82,11 @@ class DocumentResponse(BaseModel):
     file_path: str
     verification_status: str
     uploaded_at: datetime
+
+
+class DocumentVerify(BaseModel):
+    verification_status: Literal["verified", "pending_review", "rejected"]
+    by: Optional[str] = None
 
 
 class CommentCreate(BaseModel):

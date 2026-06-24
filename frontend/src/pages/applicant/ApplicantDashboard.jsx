@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ApplicantShell from '../../components/ApplicantShell'
 import { useApplicant } from '../../context/ApplicantContext'
-import { getAppsForUser, getKpis, getNotifications } from '../../data/applicantApps'
 import { getApplicantApplications } from '../../api/applicant'
 import { STATUS, TYPES } from '../../theme'
 
@@ -15,31 +14,33 @@ const FILE_ICON = (
 
 function formatDate(iso) {
   if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '—'
+    : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
+
+const DONE_STATUSES   = new Set(['approved', 'certificate_issued'])
+const ACTION_STATUSES = new Set(['missing_documents', 'under_objection'])
 
 export default function ApplicantDashboard() {
   const { user } = useApplicant()
   const navigate = useNavigate()
 
-  const localApps  = getAppsForUser(user?.id)
-  const localKpis  = getKpis(user?.id)
-  const notifs     = getNotifications(user?.id)
-
-  const [apps, setApps]       = useState(localApps)
-  const [kpis, setKpis]       = useState(localKpis)
-  const [loading, setLoading] = useState(false)
+  const [apps, setApps]       = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState('')
 
   useEffect(() => {
-    if (!user?.applicant_id) return
+    if (!user?.applicant_id) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
+    setError('')
     getApplicantApplications(user.applicant_id)
       .then(apiApps => {
-        if (!Array.isArray(apiApps) || apiApps.length === 0) return
-
-        const merged = apiApps.map(a => {
-          const local = localApps.find(l => l.id === a.application_id) || {}
-          const st    = STATUS[a.status] || { label: a.status, fg: '#475569', bg: '#eef1f4' }
+        const mapped = (apiApps || []).map(a => {
+          const st = STATUS[a.status] || { label: a.status, fg: '#475569', bg: '#eef1f4' }
           return {
             id:          a.application_id,
             type:        a.application_type,
@@ -48,26 +49,21 @@ export default function ApplicantDashboard() {
             statusLabel: st.label,
             statusFg:    st.fg,
             statusBg:    st.bg,
-            parcel:      local.parcel  || '—',
-            zone:        local.zone    || '—',
-            nextStep:    local.nextStep || '—',
-            submitted:   formatDate(a.submission_date) || local.submitted || '—',
+            submitted:   formatDate(a.submission_date),
           }
         })
-
-        const DONE_STATUSES   = new Set(['approved', 'certificate_issued'])
-        const ACTION_STATUSES = new Set(['missing_documents', 'under_objection'])
-        setApps(merged)
-        setKpis({
-          total:    merged.length,
-          pending:  merged.filter(a => !DONE_STATUSES.has(a.status)).length,
-          approved: merged.filter(a =>  DONE_STATUSES.has(a.status)).length,
-          action:   merged.filter(a =>  ACTION_STATUSES.has(a.status)).length,
-        })
+        setApps(mapped)
       })
-      .catch(() => { /* fall back to local data already set */ })
+      .catch(err => setError(err.response?.data?.detail || 'Could not load your applications.'))
       .finally(() => setLoading(false))
   }, [user?.applicant_id])
+
+  const kpis = {
+    total:    apps.length,
+    pending:  apps.filter(a => !DONE_STATUSES.has(a.status)).length,
+    approved: apps.filter(a =>  DONE_STATUSES.has(a.status)).length,
+    action:   apps.filter(a =>  ACTION_STATUSES.has(a.status)).length,
+  }
 
   const KPI_CARDS = [
     { label: 'Total Applications', value: kpis.total,    sub: 'all time',             accent: '#1f5f4f' },
@@ -81,7 +77,6 @@ export default function ApplicantDashboard() {
       title="My Dashboard"
       subtitle="Track your land registration applications and tasks"
     >
-      {/* KPI cards */}
       <div className="grid grid-cols-4 gap-[16px] mb-[20px]">
         {KPI_CARDS.map(({ label, value, sub, accent }) => (
           <div
@@ -96,7 +91,6 @@ export default function ApplicantDashboard() {
         ))}
       </div>
 
-      {/* Applications list */}
       <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px]">
         <div className="flex items-baseline justify-between mb-[16px]">
           <div className="text-[14.5px] font-bold">My Applications</div>
@@ -114,6 +108,8 @@ export default function ApplicantDashboard() {
             <div className="w-4 h-4 border-2 border-[#1f5f4f] border-t-transparent rounded-full animate-spin" />
             Loading…
           </div>
+        ) : error ? (
+          <div className="text-[13px] text-[#b91c1c] py-6 text-center">{error}</div>
         ) : apps.length === 0 ? (
           <div className="text-[13px] text-[#9aa8a2] py-6 text-center">No applications yet.</div>
         ) : (
@@ -139,37 +135,15 @@ export default function ApplicantDashboard() {
                     {a.statusLabel}
                   </span>
                 </div>
-                <div className="text-[13px] text-[#384640] mt-1">
-                  {a.typeLabel} · Parcel {a.parcel} · {a.zone}
-                </div>
+                <div className="text-[13px] text-[#384640] mt-1">{a.typeLabel}</div>
               </div>
               <div className="text-right shrink-0">
                 <div className="text-[12px] text-[#5e6b65]">{a.submitted}</div>
-                <div className="text-[11px] text-[#9aa8a2] mt-0.5">{a.nextStep}</div>
               </div>
               <div className="text-[#c2ccc7] text-[18px] leading-none">›</div>
             </div>
           ))
         )}
-      </div>
-
-      {/* Recent notifications */}
-      <div className="bg-white border border-[#e3e8e5] rounded-[13px] p-[22px] mt-[16px]">
-        <div className="text-[14.5px] font-bold mb-[14px]">Recent Notifications</div>
-        {notifs.length === 0 ? (
-          <div className="text-[13px] text-[#9aa8a2] py-4 text-center">No notifications.</div>
-        ) : notifs.map((n, i) => (
-          <div key={i} className="flex gap-[12px] py-[11px] border-b border-[#f2f4f3] last:border-b-0">
-            <div
-              className="w-2 h-2 rounded-full mt-[5px] shrink-0"
-              style={{ background: n.dot }}
-            />
-            <div className="flex-1">
-              <div className="text-[13px] text-[#16201c] leading-relaxed">{n.message}</div>
-              <div className="text-[11px] text-[#9aa8a2] mt-[3px]">{n.time}</div>
-            </div>
-          </div>
-        ))}
       </div>
     </ApplicantShell>
   )

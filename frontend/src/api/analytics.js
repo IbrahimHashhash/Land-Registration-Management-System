@@ -1,0 +1,15 @@
+import api from './client'
+
+export const getKpis              = () => api.get('/analytics/kpis')
+export const getByStatus          = () => api.get('/analytics/applications-by-status')
+export const getByType            = () => api.get('/analytics/applications-by-type')
+export const getByZone            = () => api.get('/analytics/applications-by-zone')
+export const getHotspots          = (limit = 5) => api.get('/analytics/hotspots', { params: { limit } })
+export const getDelayed           = (threshold_days = 14) => api.get('/analytics/delayed', { params: { threshold_days } })
+export const getBacklogByAge      = () => api.get('/analytics/backlog-by-age')
+export const getApplicationsOverTime = () => api.get('/analytics/applications-over-time')
+export const getProcessingTime    = () => api.get('/analytics/processing-time')
+export const getCertificatesPerMonth = () => api.get('/analytics/certificates-per-month')
+export const getDocumentStatus    = () => api.get('/analytics/document-status')
+export const getSurveyorWorkload  = () => api.get('/analytics/surveyors')
+export const getRegistrarWorkload = () => api.get('/analytics/registrars')

@@ -1,37 +1,47 @@
 import React, { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import SurveyorShell from '../../components/SurveyorShell'
 import { getMyTasks } from '../../api/staff'
 import { STATUS } from '../../theme'
-
-const SURVEYOR_ID = '675100000000000000000301'
+import { getSurveyorId } from '../../context/surveyorSession'
 
 function scheduledVisitDate(milestones) {
-  const vs = milestones.find(m => m.type === 'visit_scheduled')
+  const vs = (milestones || []).find(m => m.type === 'visit_scheduled')
   if (!vs) return '—'
-  return vs.meta?.scheduled_date || (vs.at ? vs.at.split('T')[0] : '—')
+  return vs.meta?.scheduled_date || (vs.at ? String(vs.at).split('T')[0] : '—')
 }
 
 function currentMilestone(milestones) {
-  if (!milestones.length) return '—'
+  if (!milestones || !milestones.length) return '—'
   return milestones[milestones.length - 1].type.replace(/_/g, ' ')
 }
 
 export default function SurveyorTaskList() {
+  const navigate = useNavigate()
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const surveyorId = getSurveyorId()
 
   useEffect(() => {
-    getMyTasks(SURVEYOR_ID)
+    if (!surveyorId) {
+      navigate('/surveyor/login', { replace: true })
+      return
+    }
+    getMyTasks(surveyorId)
       .then(res => setTasks(res.data))
-      .catch(() => {})
+      .catch(err => setError(err.response?.data?.detail || 'Could not load tasks.'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [surveyorId, navigate])
+
+  if (!surveyorId) return null
 
   return (
     <SurveyorShell title="My Survey Tasks" subtitle="Assigned field survey tasks">
       {loading ? (
         <p className="text-[13px] text-[#5e6b65]">Loading…</p>
+      ) : error ? (
+        <p className="text-[13px] text-[#b91c1c]">{error}</p>
       ) : tasks.length === 0 ? (
         <p className="text-[13px] text-[#5e6b65]">No tasks assigned.</p>
       ) : (

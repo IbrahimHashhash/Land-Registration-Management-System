@@ -1,0 +1,20 @@
+[
+  {
+    "application_id": "LRMIS-2026-0001",
+    "event_stream": [
+      { "type": "submitted",   "by": { "actor_type": "applicant", "actor_id": "APP-DEMO0001" }, "at": "2026-02-01T09:00:00Z", "meta": { "channel": "web" } },
+      { "type": "pre_checked", "by": { "actor_type": "registrar", "actor_id": "S14" },          "at": "2026-02-01T10:00:00Z", "meta": { "missing_documents": 0 } }
+    ],
+    "computed_kpis": { "processing_days": null, "precheck_minutes": 60, "survey_delay_days": null, "certificate_issued": false }
+  },
+  {
+    "application_id": "LRMIS-2026-0002",
+    "event_stream": [
+      { "type": "submitted",        "by": { "actor_type": "applicant", "actor_id": "APP-DEMO0002" },     "at": "2026-02-03T09:00:00Z", "meta": { "channel": "web" } },
+      { "type": "pre_checked",      "by": { "actor_type": "registrar", "actor_id": "REG-RM-09" },        "at": "2026-02-03T11:00:00Z", "meta": {} },
+      { "type": "survey_required",  "by": { "actor_type": "registrar", "actor_id": "REG-RM-09" },        "at": "2026-02-04T08:00:00Z", "meta": {} },
+      { "type": "survey_assigned",  "by": { "actor_type": "system",    "actor_id": "assignment_engine" },"at": "2026-02-04T08:00:00Z", "meta": { "assigned_surveyor": "SURV-RM-04" } }
+    ],
+    "computed_kpis": {}
+  }
+]

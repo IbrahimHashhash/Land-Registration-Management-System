@@ -29,6 +29,16 @@ def create_staff(payload: StaffCreate):
     return doc
 
 
+@router.get("/", response_model=list[StaffOut])
+def list_staff(role: str | None = None):
+    docs = service.list_staff(role)
+    out = []
+    for d in docs:
+        d["id"] = str(d["_id"])
+        out.append(d)
+    return out
+
+
 @router.get("/{staff_id}", response_model=StaffOut)
 def get_staff(staff_id: str):
     doc = service.get_staff_by_id(staff_id)

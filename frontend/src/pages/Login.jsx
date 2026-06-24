@@ -15,7 +15,7 @@ const ROLES = [
   {
     title: 'Staff / Registrar Console',
     desc: 'Review applications, manage the workflow, and issue certificates.',
-    to: '/dashboard',
+    to: '/staff/login',
     accent: '#1e5fae',
     bg: '#e7f0fb',
     icon: (

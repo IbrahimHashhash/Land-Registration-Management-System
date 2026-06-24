@@ -1,23 +1,29 @@
 import React, { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import SurveyorShell from '../../components/SurveyorShell'
 import { updateMilestone, uploadSurveyReport, addFieldNote, getMyTasks } from '../../api/staff'
+import { getSurveyorId } from '../../context/surveyorSession'
 
 const MILESTONES = ['assigned', 'visit_scheduled', 'arrived_on_site', 'survey_started', 'survey_completed', 'report_uploaded']
-const SURVEYOR_ID = '675100000000000000000301'
 
 export default function SurveyorTaskExecution() {
   const { applicationId } = useParams()
+  const navigate = useNavigate()
+  const surveyorId = getSurveyorId()
   const [task, setTask] = useState(null)
   const [loading, setLoading] = useState(true)
   const [reportTitle, setReportTitle] = useState('')
   const [findings, setFindings] = useState('')
   const [fieldNote, setFieldNote] = useState('')
 
-  useEffect(() => { fetchTask() }, [applicationId])
+  useEffect(() => {
+    if (!surveyorId) { navigate('/surveyor/login', { replace: true }); return }
+    fetchTask()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applicationId, surveyorId])
 
   function fetchTask() {
-    getMyTasks(SURVEYOR_ID)
+    getMyTasks(surveyorId)
       .then(res => {
         const t = res.data.find(t => t.application_id === applicationId)
         setTask(t || null)
@@ -36,12 +42,12 @@ export default function SurveyorTaskExecution() {
   }
 
   async function advanceMilestone(type) {
-    await updateMilestone(applicationId, { type, by: 'surveyor', meta: {} })
+    await updateMilestone(applicationId, { type, by: surveyorId, meta: {} })
     fetchTask()
   }
 
   async function submitReport() {
-    await uploadSurveyReport(applicationId, { report_title: reportTitle, findings, uploaded_by: 'surveyor' })
+    await uploadSurveyReport(applicationId, { report_title: reportTitle, findings, uploaded_by: surveyorId })
     setReportTitle('')
     setFindings('')
     fetchTask()
@@ -49,7 +55,7 @@ export default function SurveyorTaskExecution() {
 
   async function submitFieldNote() {
     if (!fieldNote.trim()) return
-    await addFieldNote(applicationId, { note: fieldNote.trim(), by: 'surveyor' })
+    await addFieldNote(applicationId, { note: fieldNote.trim(), by: surveyorId })
     setFieldNote('')
     fetchTask()
   }

@@ -1,0 +1,261 @@
+{
+  "info": {
+    "name": "LRMIS",
+    "description": "Land Registration Management Information System — full API.\n\nSet the `baseUrl` collection variable to your FastAPI server (default: http://localhost:8000). Requests that act on staff resources include the X-Staff-Role header.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl",       "value": "http://localhost:8000" },
+    { "key": "applicantId",   "value": "APP-DEMO0001" },
+    { "key": "applicationId", "value": "LRMIS-2026-0001" },
+    { "key": "documentId",    "value": "DOC-A1B2C3D4" },
+    { "key": "staffId",       "value": "" },
+    { "key": "certificateId", "value": "CERT-2026-0001" },
+    { "key": "nationalId",    "value": "990000001" }
+  ],
+  "item": [
+    {
+      "name": "Applicants",
+      "item": [
+        {
+          "name": "Create applicant",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/applicants/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"full_name\": \"Nour Ahmad\",\n  \"applicant_type\": \"citizen\",\n  \"identity\":  { \"national_id\": \"990000001\", \"verified\": false, \"verification_method\": \"otp_stub\" },\n  \"contacts\":  { \"email\": \"nour@example.com\", \"phone\": \"+970599000001\" },\n  \"address\":   { \"city\": \"Ramallah\", \"neighborhood\": \"Al Tireh\", \"zone_id\": \"ZONE-RM-01\" }\n}"
+            }
+          }
+        },
+        { "name": "Lookup by national ID", "request": { "method": "GET", "url": "{{baseUrl}}/applicants/by-national-id/{{nationalId}}" } },
+        { "name": "Get applicant",         "request": { "method": "GET", "url": "{{baseUrl}}/applicants/{{applicantId}}" } },
+        { "name": "List applicant's applications", "request": { "method": "GET", "url": "{{baseUrl}}/applicants/{{applicantId}}/applications" } },
+        { "name": "List applicant's objections",   "request": { "method": "GET", "url": "{{baseUrl}}/applicants/{{applicantId}}/objections" } }
+      ]
+    },
+    {
+      "name": "Land Applications",
+      "item": [
+        {
+          "name": "Create application (with idempotency)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",    "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "demo-key-1" }
+            ],
+            "url": "{{baseUrl}}/applications/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"application_type\": \"ownership_transfer\",\n  \"priority\": \"normal\",\n  \"applicant_ref\": { \"applicant_id\": \"{{applicantId}}\", \"applicant_type\": \"citizen\" },\n  \"parcel\": {\n    \"parcel_no\": \"145\", \"block_no\": \"12\", \"basin_no\": \"3\", \"zone_id\": \"ZONE-RM-01\",\n    \"geometry\": { \"type\": \"Polygon\", \"coordinates\": [[[35.2001,31.9021],[35.2015,31.9021],[35.2015,31.9030],[35.2001,31.9030],[35.2001,31.9021]]] }\n  },\n  \"description\": \"Ownership transfer for parcel 145/12\"\n}"
+            }
+          }
+        },
+        { "name": "List applications", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/applications/?status=pre_checked&page=1&page_size=10", "host": ["{{baseUrl}}"], "path": ["applications", ""], "query": [{"key":"status","value":"pre_checked"},{"key":"page","value":"1"},{"key":"page_size","value":"10"}] } } },
+        { "name": "Get application",   "request": { "method": "GET", "url": "{{baseUrl}}/applications/{{applicationId}}" } },
+        {
+          "name": "Transition application",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/applications/{{applicationId}}/transition",
+            "body": { "mode": "raw", "raw": "{ \"to_state\": \"pre_checked\", \"actor_id\": \"S14\" }" }
+          }
+        },
+        {
+          "name": "Hold application",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/applications/{{applicationId}}/hold",
+            "body": { "mode": "raw", "raw": "{ \"reason\": \"Awaiting clarification from applicant\" }" }
+          }
+        },
+        {
+          "name": "Reject application",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/applications/{{applicationId}}/reject",
+            "body": { "mode": "raw", "raw": "{ \"reason\": \"Documents could not be verified\" }" }
+          }
+        },
+        {
+          "name": "Issue certificate",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/applications/{{applicationId}}/certificate",
+            "body": { "mode": "raw", "raw": "{ \"certificate_type\": \"ownership_certificate\", \"full_name\": \"Nour Ahmad\", \"issued_by\": \"registrar_09\" }" }
+          }
+        },
+        { "name": "Get timeline", "request": { "method": "GET", "url": "{{baseUrl}}/applications/{{applicationId}}/timeline" } }
+      ]
+    },
+    {
+      "name": "Documents / Comments / Objections",
+      "item": [
+        {
+          "name": "Upload document",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/applications/{{applicationId}}/documents",
+            "body": { "mode": "raw", "raw": "{ \"document_type\": \"ownership_deed\", \"file_name\": \"deed.pdf\", \"file_path\": \"/uploads/deed.pdf\" }" }
+          }
+        },
+        { "name": "List documents", "request": { "method": "GET", "url": "{{baseUrl}}/applications/{{applicationId}}/documents" } },
+        {
+          "name": "Verify document (registrar)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",   "value": "application/json" },
+              { "key": "X-Staff-Role",   "value": "registrar" }
+            ],
+            "url": "{{baseUrl}}/applications/{{applicationId}}/documents/{{documentId}}/verify",
+            "body": { "mode": "raw", "raw": "{ \"verification_status\": \"verified\" }" }
+          }
+        },
+        {
+          "name": "Add comment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/applications/{{applicationId}}/comments",
+            "body": { "mode": "raw", "raw": "{ \"author_id\": \"{{applicantId}}\", \"text\": \"When will my application be reviewed?\" }" }
+          }
+        },
+        {
+          "name": "Submit objection",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/applications/{{applicationId}}/objections",
+            "body": { "mode": "raw", "raw": "{ \"author_id\": \"{{applicantId}}\", \"reason\": \"Disputing the eastern boundary\", \"supporting_documents\": [] }" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Staff",
+      "item": [
+        {
+          "name": "Create staff",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Staff-Role", "value": "registrar" }
+            ],
+            "url": "{{baseUrl}}/staff/",
+            "body": { "mode": "raw", "raw": "{\n  \"staff_code\": \"SURV-DEMO\",\n  \"name\": \"Demo Surveyor\",\n  \"role\": \"surveyor\",\n  \"skills\": [\"boundary_survey\", \"gps_mapping\"],\n  \"coverage\": { \"zone_ids\": [\"ZONE-RM-01\"] },\n  \"workload\": { \"active_tasks\": 0, \"max_tasks\": 5 }\n}" }
+          }
+        },
+        { "name": "List staff (filter by role)", "request": { "method": "GET", "header": [{ "key": "X-Staff-Role", "value": "surveyor" }], "url": { "raw": "{{baseUrl}}/staff/?role=surveyor", "host": ["{{baseUrl}}"], "path": ["staff", ""], "query": [{"key":"role","value":"surveyor"}] } } },
+        { "name": "Get staff",       "request": { "method": "GET", "header": [{ "key": "X-Staff-Role", "value": "surveyor" }], "url": "{{baseUrl}}/staff/{{staffId}}" } },
+        { "name": "List my tasks",   "request": { "method": "GET", "header": [{ "key": "X-Staff-Role", "value": "surveyor" }], "url": "{{baseUrl}}/staff/{{staffId}}/tasks" } },
+        {
+          "name": "Auto-assign surveyor",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Staff-Role", "value": "registrar" }],
+            "url": "{{baseUrl}}/applications/{{applicationId}}/auto-assign-surveyor"
+          }
+        },
+        {
+          "name": "Reassign surveyor",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Staff-Role", "value": "registrar" }
+            ],
+            "url": "{{baseUrl}}/applications/{{applicationId}}/reassign-surveyor",
+            "body": { "mode": "raw", "raw": "{ \"new_surveyor_id\": \"{{staffId}}\" }" }
+          }
+        },
+        {
+          "name": "Update milestone",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Staff-Role", "value": "surveyor" }
+            ],
+            "url": "{{baseUrl}}/applications/{{applicationId}}/survey-milestone",
+            "body": { "mode": "raw", "raw": "{ \"type\": \"visit_scheduled\", \"by\": \"{{staffId}}\", \"meta\": { \"scheduled_date\": \"2026-02-06\" } }" }
+          }
+        },
+        {
+          "name": "Add field note",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Staff-Role", "value": "surveyor" }
+            ],
+            "url": "{{baseUrl}}/applications/{{applicationId}}/field-note",
+            "body": { "mode": "raw", "raw": "{ \"note\": \"Boundary verified\", \"by\": \"{{staffId}}\" }" }
+          }
+        },
+        {
+          "name": "Upload survey report",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Staff-Role", "value": "surveyor" }
+            ],
+            "url": "{{baseUrl}}/applications/{{applicationId}}/survey-report",
+            "body": { "mode": "raw", "raw": "{ \"report_title\": \"Boundary survey\", \"findings\": \"All clear\", \"uploaded_by\": \"{{staffId}}\" }" }
+          }
+        },
+        {
+          "name": "Registrar review",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Staff-Role", "value": "registrar" }
+            ],
+            "url": "{{baseUrl}}/applications/{{applicationId}}/registrar-review",
+            "body": { "mode": "raw", "raw": "{ \"decision\": \"approved\", \"reviewed_by\": \"{{staffId}}\", \"notes\": \"All conditions satisfied\" }" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Certificates",
+      "item": [
+        { "name": "List certificates", "request": { "method": "GET", "url": "{{baseUrl}}/certificates/" } },
+        { "name": "Get certificate",   "request": { "method": "GET", "url": "{{baseUrl}}/certificates/{{certificateId}}" } }
+      ]
+    },
+    {
+      "name": "Analytics",
+      "item": [
+        { "name": "KPIs",                       "request": { "method": "GET", "url": "{{baseUrl}}/analytics/kpis" } },
+        { "name": "Applications by status",     "request": { "method": "GET", "url": "{{baseUrl}}/analytics/applications-by-status" } },
+        { "name": "Applications by type",       "request": { "method": "GET", "url": "{{baseUrl}}/analytics/applications-by-type" } },
+        { "name": "Applications by zone",       "request": { "method": "GET", "url": "{{baseUrl}}/analytics/applications-by-zone" } },
+        { "name": "Processing time",            "request": { "method": "GET", "url": "{{baseUrl}}/analytics/processing-time" } },
+        { "name": "Surveyor workload",          "request": { "method": "GET", "url": "{{baseUrl}}/analytics/surveyors" } },
+        { "name": "Registrar workload",         "request": { "method": "GET", "url": "{{baseUrl}}/analytics/registrars" } },
+        { "name": "Hotspots",                   "request": { "method": "GET", "url": "{{baseUrl}}/analytics/hotspots?limit=5" } },
+        { "name": "Delayed applications",       "request": { "method": "GET", "url": "{{baseUrl}}/analytics/delayed?threshold_days=14" } },
+        { "name": "Backlog by age",             "request": { "method": "GET", "url": "{{baseUrl}}/analytics/backlog-by-age" } },
+        { "name": "Applications over time",     "request": { "method": "GET", "url": "{{baseUrl}}/analytics/applications-over-time" } },
+        { "name": "Certificates per month",     "request": { "method": "GET", "url": "{{baseUrl}}/analytics/certificates-per-month" } },
+        { "name": "Document status",            "request": { "method": "GET", "url": "{{baseUrl}}/analytics/document-status" } },
+        { "name": "Geofeed: parcels",           "request": { "method": "GET", "url": "{{baseUrl}}/analytics/geofeeds/parcels" } },
+        { "name": "Geofeed: applications",      "request": { "method": "GET", "url": "{{baseUrl}}/analytics/geofeeds/applications" } },
+        { "name": "Geofeed: pending heatmap",   "request": { "method": "GET", "url": "{{baseUrl}}/analytics/geofeeds/pending-heatmap" } },
+        { "name": "Geofeed: parcels-near",      "request": { "method": "GET", "url": "{{baseUrl}}/analytics/geofeeds/parcels-near?lng=35.2&lat=31.9&max_meters=5000" } },
+        { "name": "Export CSV",                 "request": { "method": "GET", "url": "{{baseUrl}}/analytics/export/applications.csv" } }
+      ]
+    }
+  ]
+}

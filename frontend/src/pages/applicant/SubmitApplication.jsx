@@ -393,9 +393,11 @@ export default function SubmitApplication() {
                     <div className="text-[13px] font-semibold text-[#16201c] truncate">{doc.name}</div>
                     <div className="text-[11.5px] text-[#9aa8a2]">{fmtSize(doc.size)}</div>
                   </div>
-                  <FormSelect value={doc.type} onChange={e => setDocType(i, e.target.value)} className="w-[160px] py-[7px] text-[12px]">
-                    {DOC_TYPES.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
-                  </FormSelect>
+                  <div className="w-[170px] shrink-0">
+                    <FormSelect value={doc.type} onChange={e => setDocType(i, e.target.value)} className="py-[7px] text-[12px]">
+                      {DOC_TYPES.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+                    </FormSelect>
+                  </div>
                   <button type="button" onClick={() => removeDoc(i)} className="text-[#9aa8a2] hover:text-[#b91c1c] transition-colors shrink-0">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   </button>
