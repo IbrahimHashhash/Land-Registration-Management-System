@@ -10,7 +10,7 @@ import { TYPES, APPLICANT_TYPES, STATUS } from '../theme'
 import StatusBadge from '../components/ui/StatusBadge'
 import {
   getApplication, getTimeline, transitionApplication,
-  holdApplication, rejectApplication, issueCertificate,
+  holdApplication, rejectApplication, issueCertificate, listDocuments,
 } from '../api/applications'
 import { listStaff, reassignSurveyor, autoAssignSurveyor } from '../api/staff'
 import { apiError } from '../utils/apiError'
@@ -121,15 +121,17 @@ export default function ApplicationDetails() {
 
   const [surveyors, setSurveyors] = useState([])
   const [selectedSurveyor, setSelectedSurveyor] = useState('')
+  const [uploadedDocs, setUploadedDocs] = useState([])
 
   const load = useCallback(() => {
     setLoading(true)
     setError('')
-    Promise.all([getApplication(id), getTimeline(id)])
-      .then(([a, t]) => {
+    Promise.all([getApplication(id), getTimeline(id), listDocuments(id).catch(() => ({ data: [] }))])
+      .then(([a, t, d]) => {
         setApp(a.data)
         setEvents(t.data)
-        setTarget((a.data.workflow?.allowed_next || [])[0] || '')
+        setUploadedDocs(d.data || [])
+        setTarget((a.data.workflow?.allowed_next || []).filter(s => s !== 'certificate_issued')[0] || '')
         setSelectedSurveyor(a.data.assignment?.assigned_surveyor_id || '')
       })
       .catch((e) => setError(apiError(e, 'Could not load this application.')))
@@ -173,7 +175,7 @@ export default function ApplicationDetails() {
   const parcel = app.parcel || {}
   const parcelCenter = geometryCenter(parcel.geometry)
   const applicant = app.applicant_ref || {}
-  const allowed = app.workflow?.allowed_next || []
+  const allowed = (app.workflow?.allowed_next || []).filter(s => s !== 'certificate_issued')
   const docs = app.required_documents || []
   const notes = app.internal?.notes || []
   const canCertificate = app.status === 'approved'
@@ -277,6 +279,35 @@ export default function ApplicationDetails() {
                       style={{ color: '#5e6b65', background: '#eef1f4' }}>{labelize(d.status)}</span>
                   </div>
                 ))}
+              </div>
+            )}
+          </Card>
+
+          <Card className="p-[20px]">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-[11.5px] font-semibold tracking-[.07em] uppercase text-[#5e6b65]">Uploaded Documents</div>
+              <span className="text-[12px] text-[#5e6b65]">{uploadedDocs.length} file{uploadedDocs.length === 1 ? '' : 's'}</span>
+            </div>
+            {uploadedDocs.length === 0 ? (
+              <div className="text-[13px] text-[#9aa8a2]">No files uploaded yet.</div>
+            ) : (
+              <div className="space-y-[10px]">
+                {uploadedDocs.map(d => {
+                  const st = d.verification_status || 'pending_review'
+                  const color = st === 'verified' ? { fg: '#1f7a4d', bg: '#e2f3e9' } : st === 'rejected' ? { fg: '#b91c1c', bg: '#fbe6e6' } : { fg: '#b45309', bg: '#fbeedd' }
+                  return (
+                    <div key={d.document_id} className="flex items-center gap-3 p-[13px] bg-[#f8faf9] rounded-[9px] border border-[#e3e8e5]">
+                      <div className="w-8 h-8 bg-[#e7f1ee] rounded-[7px] flex items-center justify-center shrink-0">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1f5f4f" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[13px] font-medium text-[#16201c]">{labelize(d.document_type)}</div>
+                        <div className="text-[11.5px] text-[#9aa8a2] mono truncate">{d.file_name}</div>
+                      </div>
+                      <span className="text-[11px] font-semibold px-[9px] py-[3px] rounded-full whitespace-nowrap" style={{ color: color.fg, background: color.bg }}>{labelize(st)}</span>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </Card>

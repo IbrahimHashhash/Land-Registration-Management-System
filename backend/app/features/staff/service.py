@@ -221,14 +221,31 @@ def registrar_review(application_id: str, decision: str, reviewed_by: str, notes
         return None
 
     current = app.get("status")
+    now = datetime.now(timezone.utc)
+
+    # The registrar review is the legal-review step. If the application is still
+    # `surveyed`, advance it into legal_review first so the decision follows the
+    # workflow (surveyed -> legal_review -> approved/rejected).
+    if current == "surveyed" and decision in ("approved", "rejected", "legal_review"):
+        applications_col.update_one(
+            {"application_id": application_id},
+            {"$set": {
+                "status": "legal_review",
+                "workflow.current_state": "legal_review",
+                "workflow.allowed_next": ALLOWED_NEXT["legal_review"],
+                "timestamps.legal_review_at": now,
+                "timestamps.updated_at": now,
+            }},
+        )
+        _log_event(application_id, "legal_review", "registrar", reviewed_by, {"auto": "from surveyed"})
+        current = "legal_review"
+
     if decision != current and decision not in ALLOWED_NEXT.get(current, []):
         from fastapi import HTTPException
         raise HTTPException(
             status_code=400,
             detail=f"Cannot move from {current} to {decision}",
         )
-
-    now = datetime.now(timezone.utc)
     update: dict = {
         "$set": {
             "status": decision,

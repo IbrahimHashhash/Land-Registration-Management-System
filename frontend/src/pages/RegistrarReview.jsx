@@ -227,23 +227,23 @@ export default function RegistrarReview() {
                       <Button
                         variant={currentStatus === 'verified' ? 'success' : 'ghost'}
                         size="sm"
-                        onClick={() => updateDoc(doc.document_id, 'verified')}
+                        onClick={() => updateDoc(doc.document_id, currentStatus === 'verified' ? 'pending_review' : 'verified')}
                       >
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                           <polyline points="20 6 9 17 4 12"/>
                         </svg>
-                        Accept
+                        {currentStatus === 'verified' ? 'Verified' : 'Accept'}
                       </Button>
                       <Button
                         variant={currentStatus === 'rejected' ? 'danger' : 'ghost'}
                         size="sm"
-                        onClick={() => updateDoc(doc.document_id, 'rejected')}
+                        onClick={() => updateDoc(doc.document_id, currentStatus === 'rejected' ? 'pending_review' : 'rejected')}
                       >
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                           <line x1="18" y1="6" x2="6" y2="18"/>
                           <line x1="6" y1="6" x2="18" y2="18"/>
                         </svg>
-                        Reject
+                        {currentStatus === 'rejected' ? 'Rejected' : 'Reject'}
                       </Button>
                     </div>
                   </div>
