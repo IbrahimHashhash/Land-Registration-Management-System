@@ -194,6 +194,8 @@ def create_survey_report(application_id: str, data: dict) -> dict | None:
             "$push": {"milestones": {"type": "report_uploaded", "at": now, "by": data["uploaded_by"], "meta": {}}},
         },
     )
+    # Task is now complete — free up the surveyor's workload counter.
+    staff_col.update_one({"_id": task["assigned_surveyor_id"]}, {"$inc": {"workload.active_tasks": -1}})
     # Only auto-advance the application to `surveyed` if it's still in
     # `survey_required`. Uploading another report after legal_review etc.
     # must not downgrade the workflow state.
